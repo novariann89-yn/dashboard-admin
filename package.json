@@ -10,6 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lan": "COOKIE_SECURE=false next start -p 3000",
+    "restart": "bash scripts/restart-lan.sh --detach",
+    "stop": "pkill -f \"[n]ext-server\" || true",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "db:generate": "drizzle-kit generate",

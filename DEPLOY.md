@@ -5,11 +5,11 @@ Panduan langkah demi langkah untuk menaruh aplikasi ini online (diakses dari HP 
 ## Sementara: jalan di WiFi lokal (tanpa akun)
 Kalau belum mau bikin akun Turso/Vercel, aplikasi bisa dijalankan dari komputer ini dan diakses HP yang tersambung ke WiFi yang sama:
 
-1. `npm run build`
-2. `npm run lan` — server jalan di port 3000 (cookie tidak Secure supaya bisa lewat http)
-3. Cek IP komputer: `hostname -I` (pakai yang seperti 172.x / 192.168.x, bukan docker0)
-4. Buka di HP: `http://<IP-komputer>:3000`
-5. Kalau dari HP tidak bisa kebuka, izinkan port-nya: `sudo ufw allow 3000/tcp`
+1. `npm run restart` — build ulang + jalankan server di background (port 3000, cookie tidak Secure supaya bisa lewat http). Script akan menampilkan alamat HP-nya.
+2. Buka di HP: `http://<IP-komputer>:3000` (cek IP: `hostname -I`, pakai yang seperti 172.x / 192.168.x, bukan docker0)
+3. Kalau dari HP tidak bisa kebuka, izinkan port-nya: `sudo ufw allow 3000/tcp`
+4. Hentikan server: `npm run stop` (log ada di `/tmp/toko-mas-andik.log`)
+5. Mau lihat log langsung di terminal: `npm run lan` (foreground, Ctrl+C untuk berhenti)
 
 Catatan: komputer harus tetap menyala dan HP harus satu WiFi. Data tersimpan di `local.db` pada folder ini — tetap unduh backup CSV berkala dari Pengaturan. Ganti PIN default (1234) sebelum dipakai serius: `npm run hash-pin -- <pin-baru>` lalu update `ADMIN_PIN_HASH` di `.env.local` dan restart.
 
