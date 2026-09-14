@@ -1,12 +1,15 @@
 import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import Link from "next/link";
 import { redeemBonusAction } from "@/actions/bonus";
+import { IconPlus } from "@/components/icons";
 import {
-  badgeClass,
   buttonClass,
   cardClass,
   linkClass,
+  sectionLabelClass,
   smallButtonClass,
+  statusVoidClass,
+  strongCardClass,
 } from "@/components/ui";
 import { db } from "@/db";
 import {
@@ -103,55 +106,85 @@ export default async function DashboardPage() {
     .limit(5);
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-bold">Beranda</h1>
+    <div className="flex flex-col gap-5">
+      <h1 className="text-xl font-extrabold tracking-tight">Beranda</h1>
 
-      <Link href="/pembelian" className={`${buttonClass} text-center`}>
-        + Catat Pembelian
+      <Link href="/pembelian" className={buttonClass}>
+        <IconPlus className="h-4 w-4" />
+        Catat Pembelian
       </Link>
 
-      <div className="grid grid-cols-3 gap-2">
-        <div className={cardClass}>
-          <p className="text-xs text-gray-500">Transaksi hari ini</p>
-          <p className="text-xl font-bold">{Number(today?.count ?? 0)}</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className={strongCardClass}>
+          <p className={sectionLabelClass}>Transaksi hari ini</p>
+          <p className="mt-1 text-3xl font-extrabold tabular-nums">
+            {Number(today?.count ?? 0)}
+          </p>
         </div>
-        <div className={cardClass}>
-          <p className="text-xs text-gray-500">Omzet hari ini</p>
-          <p className="text-xl font-bold">{rupiah(Number(today?.revenue ?? 0))}</p>
-        </div>
-        <div className={cardClass}>
-          <p className="text-xs text-gray-500">Botol terjual</p>
-          <p className="text-xl font-bold">{Number(bottles?.qty ?? 0)}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <div className={cardClass}>
-          <p className="text-xs text-gray-500">Member aktif</p>
-          <p className="text-xl font-bold">{Number(memberCount?.count ?? 0)}</p>
-        </div>
-        <div className={cardClass}>
-          <p className="text-xs text-gray-500">Member baru minggu ini</p>
-          <p className="text-xl font-bold">{Number(newMembers?.count ?? 0)}</p>
+        <div className={strongCardClass}>
+          <p className={sectionLabelClass}>Botol terjual</p>
+          <p className="mt-1 text-3xl font-extrabold tabular-nums">
+            {Number(bottles?.qty ?? 0)}
+          </p>
         </div>
       </div>
 
-      <section className={cardClass}>
-        <h2 className="mb-2 text-sm font-semibold">Bonus belum diberikan</h2>
+      <div className={strongCardClass}>
+        <p className={sectionLabelClass}>Omzet hari ini</p>
+        <p className="mt-1 text-3xl font-extrabold tabular-nums">
+          {rupiah(Number(today?.revenue ?? 0))}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className={cardClass}>
+          <p className="text-xs font-semibold text-ink-soft">Member aktif</p>
+          <p className="mt-1 text-xl font-extrabold tabular-nums">
+            {Number(memberCount?.count ?? 0)}
+          </p>
+        </div>
+        <div className={cardClass}>
+          <p className="text-xs font-semibold text-ink-soft">
+            Member baru minggu ini
+          </p>
+          <p className="mt-1 text-xl font-extrabold tabular-nums">
+            {Number(newMembers?.count ?? 0)}
+          </p>
+        </div>
+      </div>
+
+      <section
+        className={
+          pendingBonuses.length > 0
+            ? "rounded-card border-2 border-soy-dark/50 bg-cream p-4"
+            : cardClass
+        }
+      >
+        <h2 className="flex items-center gap-2 text-sm font-extrabold">
+          Bonus belum diberikan
+          {pendingBonuses.length > 0 && (
+            <span className="rounded-full bg-soy px-2 py-0.5 text-xs font-bold tabular-nums text-ink">
+              {pendingBonuses.length}
+            </span>
+          )}
+        </h2>
         {pendingBonuses.length === 0 ? (
-          <p className="text-sm text-gray-500">Tidak ada bonus tertunda.</p>
+          <p className="mt-2 text-sm text-ink-soft">Tidak ada bonus tertunda.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="mt-3 flex flex-col gap-3">
             {pendingBonuses.map((event) => (
               <li
                 key={event.id}
                 className="flex items-center justify-between gap-2 text-sm"
               >
                 <span>
-                  <Link href={`/member/${event.memberId}`} className="font-medium underline">
+                  <Link href={`/member/${event.memberId}`} className={linkClass}>
                     {event.memberName}
-                  </Link>{" "}
-                  - {event.rewardQty} {event.rewardProductName}
+                  </Link>
+                  <span className="block text-xs font-medium text-ink-soft">
+                    {event.rewardQty} {event.rewardProductName} ·{" "}
+                    {formatDateTime(event.earnedAt)}
+                  </span>
                 </span>
                 <form action={redeemBonusAction}>
                   <input type="hidden" name="eventId" value={event.id} />
@@ -166,48 +199,64 @@ export default async function DashboardPage() {
 
       {rule && (
         <section className={cardClass}>
-          <h2 className="mb-2 text-sm font-semibold">
+          <h2 className={sectionLabelClass}>
             Hampir dapat bonus ({rule.threshold} pembelian)
           </h2>
           {nearBonus.length === 0 ? (
-            <p className="text-sm text-gray-500">Belum ada.</p>
+            <p className="mt-2 text-sm text-ink-soft">Belum ada.</p>
           ) : (
-            <ul className="flex flex-col gap-1">
-              {nearBonus.map((m) => (
-                <li key={m.id} className="flex justify-between text-sm">
-                  <Link href={`/member/${m.id}`} className="underline">
-                    {m.name}
-                  </Link>
-                  <span className={badgeClass}>
-                    {m.bonusProgress}/{rule.threshold}
-                  </span>
-                </li>
-              ))}
+            <ul className="mt-3 flex flex-col gap-3">
+              {nearBonus.map((m) => {
+                const pct = Math.min(
+                  100,
+                  Math.round((m.bonusProgress / rule.threshold) * 100),
+                );
+                return (
+                  <li key={m.id}>
+                    <div className="flex items-center justify-between text-sm">
+                      <Link href={`/member/${m.id}`} className="font-semibold">
+                        {m.name}
+                      </Link>
+                      <span className="tabular-nums text-ink-soft">
+                        {m.bonusProgress}/{rule.threshold}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-2 rounded-full bg-line">
+                      <div
+                        className="h-2 rounded-full bg-soy"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
       )}
 
       <section className={cardClass}>
-        <h2 className="mb-2 text-sm font-semibold">Transaksi terakhir</h2>
+        <h2 className={sectionLabelClass}>Transaksi terakhir</h2>
         {recent.length === 0 ? (
-          <p className="text-sm text-gray-500">Belum ada transaksi.</p>
+          <p className="mt-2 text-sm text-ink-soft">Belum ada transaksi.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="mt-1 flex flex-col divide-y divide-line">
             {recent.map((p) => (
-              <li key={p.id} className="flex items-center justify-between text-sm">
-                <span>
-                  <Link href={`/riwayat/${p.id}`} className={linkClass}>
+              <li key={p.id} className="flex items-center justify-between py-2.5">
+                <span className="text-sm">
+                  <Link href={`/riwayat/${p.id}`} className="font-semibold">
                     {p.memberName}
                   </Link>
-                  <span className="block text-xs text-gray-500">
+                  <span className="block text-xs tabular-nums text-ink-soft">
                     {formatDateTime(p.occurredAt)}
                   </span>
                 </span>
-                <span className="text-right">
+                <span className="text-right text-sm font-bold tabular-nums">
                   {rupiah(p.totalAmount)}
                   {p.status === "void" && (
-                    <span className="block text-xs text-red-600">dibatalkan</span>
+                    <span className={`${statusVoidClass} mt-1 block w-fit`}>
+                      dibatalkan
+                    </span>
                   )}
                 </span>
               </li>

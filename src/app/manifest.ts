@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Dashboard member dan pembelian",
     start_url: "/",
     display: "standalone",
-    background_color: "#f9fafb",
-    theme_color: "#111827",
+    background_color: "#f7f2e8",
+    theme_color: "#241d15",
     icons: [
       {
         src: "/icon.svg",

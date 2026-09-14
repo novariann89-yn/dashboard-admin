@@ -1,12 +1,15 @@
 import { desc, eq, like, or } from "drizzle-orm";
 import Link from "next/link";
 import { createMemberAction } from "@/actions/members";
+import { IconPlus, IconSearch } from "@/components/icons";
 import {
+  alertErrorClass,
+  alertSuccessClass,
   badgeClass,
   buttonClass,
   cardClass,
   inputClass,
-  smallButtonClass,
+  sectionLabelClass,
 } from "@/components/ui";
 import { db } from "@/db";
 import { bonusRules, members } from "@/db/schema";
@@ -40,24 +43,21 @@ export default async function MemberPage({
     .where(eq(bonusRules.isActive, true))
     .limit(1);
 
+  const threshold = rule?.threshold ?? 0;
+
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-bold">Member</h1>
+    <div className="flex flex-col gap-5">
+      <h1 className="text-xl font-extrabold tracking-tight">Member</h1>
 
-      {error && (
-        <p className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </p>
-      )}
-      {ok && (
-        <p className="rounded border border-green-300 bg-green-50 p-3 text-sm text-green-700">
-          {ok}
-        </p>
-      )}
+      {error && <p className={alertErrorClass}>{error}</p>}
+      {ok && <p className={alertSuccessClass}>{ok}</p>}
 
-      <section className={cardClass}>
-        <h2 className="mb-2 text-sm font-semibold">Tambah member</h2>
-        <form action={createMemberAction} className="flex flex-col gap-2">
+      <details className={cardClass}>
+        <summary className="flex cursor-pointer items-center gap-2 text-sm font-extrabold">
+          <IconPlus className="h-4 w-4" />
+          Tambah member
+        </summary>
+        <form action={createMemberAction} className="mt-3 flex flex-col gap-3">
           <input name="name" placeholder="Nama" className={inputClass} required />
           <input
             name="phone"
@@ -69,50 +69,77 @@ export default async function MemberPage({
           <input name="notes" placeholder="Catatan (opsional)" className={inputClass} />
           <button className={buttonClass}>Tambah</button>
         </form>
-      </section>
+      </details>
 
-      <section className={cardClass}>
-        <form method="get" className="mb-3 flex gap-2">
-          <input
-            name="q"
-            defaultValue={q}
-            placeholder="Cari nama / nomor"
-            className={inputClass}
-          />
-          <button className={buttonClass}>Cari</button>
-        </form>
+      <form method="get" className="flex gap-2">
+        <input
+          name="q"
+          defaultValue={q}
+          placeholder="Cari nama / nomor"
+          className={inputClass}
+        />
+        <button className={buttonClass}>
+          <IconSearch className="h-4 w-4" />
+          Cari
+        </button>
+      </form>
 
-        {rows.length === 0 ? (
-          <p className="text-sm text-gray-500">Tidak ada member.</p>
-        ) : (
-          <ul className="flex flex-col divide-y divide-gray-100">
-            {rows.map((m) => (
-              <li key={m.id} className="flex items-center justify-between gap-2 py-2">
-                <div className="text-sm">
-                  <Link href={`/member/${m.id}`} className="font-medium underline">
-                    {m.name}
-                  </Link>
-                  {!m.isActive && <span className="ml-1 text-xs text-gray-400">(nonaktif)</span>}
-                  <p className="text-xs text-gray-500">{formatPhone(m.phone)}</p>
-                </div>
-                <div className="text-right text-xs text-gray-600">
-                  <span className={badgeClass}>
-                    {m.bonusProgress}/{rule?.threshold ?? "-"}
-                  </span>
-                  <p>{m.totalPurchases}x beli | {m.totalBonuses} bonus</p>
-                </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-ink-soft">Tidak ada member.</p>
+      ) : (
+        <ul className="flex flex-col gap-3">
+          {rows.map((m) => {
+            const pct =
+              threshold > 0
+                ? Math.min(100, Math.round((m.bonusProgress / threshold) * 100))
+                : 0;
+            return (
+              <li key={m.id}>
+                <Link
+                  href={`/member/${m.id}`}
+                  className={`block rounded-card border p-3 ${
+                    m.isActive
+                      ? "border-line bg-surface"
+                      : "border-line bg-canvas opacity-70"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-bold">
+                        {m.name}
+                        {!m.isActive && (
+                          <span className="ml-1 text-xs font-medium text-ink-soft">
+                            (nonaktif)
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs tabular-nums text-ink-soft">
+                        {formatPhone(m.phone)}
+                      </p>
+                    </div>
+                    <span className={badgeClass}>
+                      {m.bonusProgress}/{threshold || "-"}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1.5 rounded-full bg-line">
+                    <div
+                      className="h-1.5 rounded-full bg-soy"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-[11px] tabular-nums text-ink-soft">
+                    {m.totalPurchases}x beli · {m.totalBonuses} bonus
+                  </p>
+                </Link>
               </li>
-            ))}
-          </ul>
-        )}
-      </section>
+            );
+          })}
+        </ul>
+      )}
 
-      <p className="text-xs text-gray-400">
+      <p className={sectionLabelClass}>
         Menampilkan maksimal 200 member. Gunakan pencarian untuk mempersempit.
       </p>
-      <Link href="/pembelian" className={`${smallButtonClass} text-center`}>
-        Catat pembelian
-      </Link>
     </div>
   );
 }

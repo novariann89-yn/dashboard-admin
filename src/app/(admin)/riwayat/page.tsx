@@ -1,6 +1,10 @@
 import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
-import { cardClass } from "@/components/ui";
+import {
+  cardClass,
+  sectionLabelClass,
+  statusVoidClass,
+} from "@/components/ui";
 import { db } from "@/db";
 import { members, purchases } from "@/db/schema";
 import { formatDateTime, rupiah } from "@/lib/format";
@@ -23,29 +27,31 @@ export default async function RiwayatPage() {
     .limit(100);
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-bold">Riwayat Pembelian</h1>
+    <div className="flex flex-col gap-5">
+      <h1 className="text-xl font-extrabold tracking-tight">Riwayat Pembelian</h1>
 
       <section className={cardClass}>
         {rows.length === 0 ? (
-          <p className="text-sm text-gray-500">Belum ada pembelian.</p>
+          <p className="text-sm text-ink-soft">Belum ada pembelian.</p>
         ) : (
-          <ul className="flex flex-col divide-y divide-gray-100">
+          <ul className="flex flex-col divide-y divide-line">
             {rows.map((p) => (
-              <li key={p.id} className="flex items-center justify-between py-2 text-sm">
-                <span>
-                  <Link href={`/riwayat/${p.id}`} className="font-medium underline">
+              <li key={p.id} className="flex items-center justify-between py-3">
+                <span className="text-sm">
+                  <Link href={`/riwayat/${p.id}`} className="font-bold">
                     {p.memberName}
                   </Link>
-                  <span className="block text-xs text-gray-500">
+                  <span className="block text-xs tabular-nums text-ink-soft">
                     {formatDateTime(p.occurredAt)}
-                    {!p.countsTowardBonus && " | tidak dihitung bonus"}
+                    {!p.countsTowardBonus && " · tidak dihitung bonus"}
                   </span>
                 </span>
                 <span className="text-right">
-                  {rupiah(p.totalAmount)}
+                  <span className="block text-sm font-bold tabular-nums">
+                    {rupiah(p.totalAmount)}
+                  </span>
                   {p.status === "void" && (
-                    <span className="block text-xs text-red-600">dibatalkan</span>
+                    <span className={`${statusVoidClass} mt-1`}>dibatalkan</span>
                   )}
                 </span>
               </li>
@@ -54,7 +60,7 @@ export default async function RiwayatPage() {
         )}
       </section>
 
-      <p className="text-xs text-gray-400">Menampilkan 100 transaksi terakhir.</p>
+      <p className={sectionLabelClass}>Menampilkan 100 transaksi terakhir.</p>
     </div>
   );
 }
