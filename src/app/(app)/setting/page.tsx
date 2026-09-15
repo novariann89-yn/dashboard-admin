@@ -14,6 +14,8 @@ import {
   statusActiveClass,
 } from "@/components/ui";
 import { downloadBackup, importBackup } from "@/lib/backup";
+import { DiscountRulesSection } from "@/components/discount-rules";
+import { ResellerSection } from "@/components/reseller-levels";
 import { marginPercent } from "@/lib/pricing";
 import { hashPin, isValidPin, randomSalt, verifyPin } from "@/lib/pin";
 import {
@@ -72,6 +74,10 @@ export default function SettingPage() {
         step={settings?.roundingStep ?? 500}
         loaded={settings !== null}
       />
+
+      <ResellerSection />
+
+      <DiscountRulesSection />
 
       <PinSection />
 
@@ -138,7 +144,7 @@ export default function SettingPage() {
       <section className={cardClass}>
         <h2 className={sectionLabelClass}>Tentang</h2>
         <p className="mt-1 text-xs text-ink-soft">
-          Dashboard Admin v0.2.0 (Fase 1). Semua data tersimpan lokal di HP
+          Dashboard Admin v0.3.0 (Fase 2). Semua data tersimpan lokal di HP
           (offline). PIN hanya mengunci tampilan aplikasi.
         </p>
       </section>

@@ -3,6 +3,7 @@ import { getDb } from "./db";
 export interface AppSettings {
   roundingEnabled: boolean;
   roundingStep: number;
+  resellerMoq: number;
   pinHash: string | null;
   pinSalt: string | null;
   pinIsDefault: boolean;
@@ -12,6 +13,7 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   roundingEnabled: true,
   roundingStep: 500,
+  resellerMoq: 24,
   pinHash: null,
   pinSalt: null,
   pinIsDefault: false,
@@ -30,6 +32,9 @@ export async function getSettings(): Promise<AppSettings> {
     roundingStep: raw.roundingStep
       ? Number(raw.roundingStep) || DEFAULT_SETTINGS.roundingStep
       : DEFAULT_SETTINGS.roundingStep,
+    resellerMoq: raw.resellerMoq
+      ? Number(raw.resellerMoq) || DEFAULT_SETTINGS.resellerMoq
+      : DEFAULT_SETTINGS.resellerMoq,
     pinHash: raw.pinHash || null,
     pinSalt: raw.pinSalt || null,
     pinIsDefault: raw.pinIsDefault ? raw.pinIsDefault === "true" : false,

@@ -31,6 +31,13 @@ function lanAddress() {
 }
 
 const server = createServer(async (request, response) => {
+  const started = Date.now();
+  response.on("finish", () => {
+    console.log(
+      `${new Date().toISOString()} ${request.method} ${request.url} ${response.statusCode} ${Date.now() - started}ms`,
+    );
+  });
+
   try {
     const url = new URL(request.url ?? "/", "http://localhost");
     let pathname = decodeURIComponent(url.pathname);

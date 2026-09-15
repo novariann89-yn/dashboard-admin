@@ -5,11 +5,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { IconMinus, IconX } from "@/components/icons";
 import { useToast } from "@/components/toast";
 import { cardClass, inputClass, sectionLabelClass } from "@/components/ui";
+import { computeDiscount } from "@/lib/discounts";
 import { changeDue, computeTotals } from "@/lib/pricing";
 import { rupiah } from "@/lib/format";
+import { resolveResellerPrice } from "@/lib/reseller";
 import { createCustomer, getCustomer, listCustomers } from "@/lib/repos/customers";
+import { listResellerLevels, listDiscountRules } from "@/lib/repos/discounts";
 import { listVariantsWithProduct } from "@/lib/repos/products";
-import { createTransaction, listRecentTransactions } from "@/lib/repos/transactions";
+import {
+  createTransaction,
+  listRecentTransactions,
+} from "@/lib/repos/transactions";
 import { searchCustomers } from "@/lib/search";
 import { getSettings } from "@/lib/settings";
 import type { BuyerType, Customer, PaymentMethod } from "@/lib/types";
@@ -34,6 +40,8 @@ export default function BeliPage() {
   const variants = useLiveQuery(() => listVariantsWithProduct(true), [], []);
   const customers = useLiveQuery(() => listCustomers(), [], []);
   const settings = useLiveQuery(() => getSettings(), [], null);
+  const levels = useLiveQuery(() => listResellerLevels(), [], []);
+  const rules = useLiveQuery(() => listDiscountRules(), [], []);
 
   const [cart, setCart] = useState<Record<string, number>>({});
   const [buyerType, setBuyerType] = useState<BuyerType>("umum");
@@ -75,35 +83,115 @@ export default function BeliPage() {
     };
   }, [recentVersion]);
 
-  const cartLines = useMemo(() => {
+  const totalBottles = useMemo(
+    () => Object.values(cart).reduce((sum, qty) => sum + qty, 0),
+    [cart],
+  );
+
+  const pricedLines = useMemo(() => {
     return Object.entries(cart)
       .filter(([, qty]) => qty > 0)
       .flatMap(([variantId, qty]) => {
         const variant = variants.find((item) => item.id === variantId);
         if (!variant) return [];
-        const unitPrice =
-          buyerType === "reseller" ? variant.resellerPrice : variant.sellPrice;
+
+        let unitPrice = variant.sellPrice;
+        let levelName: string | null = null;
+
+        if (buyerType === "reseller") {
+          const tier = resolveResellerPrice({
+            totalBottles,
+            moq: settings?.resellerMoq ?? 24,
+            levels: levels.map((level) => ({
+              id: level.id,
+              name: level.name,
+              minBottles: level.minBottles,
+              active: level.active,
+              prices: level.prices,
+            })),
+            lockedLevelId: customer?.resellerLevelId ?? null,
+            variantId,
+            fallbackPrice: variant.resellerPrice,
+          });
+          if (tier.eligible) {
+            unitPrice = tier.price;
+            levelName = tier.levelName;
+          }
+        }
+
         return [
           {
             variantId,
             qty,
             unitPrice,
+            levelName,
+            productId: variant.productId,
+            category: variant.category,
+            costPrice: variant.costPrice,
             name: `${variant.productName} ${variant.sizeName}`,
             subtotal: unitPrice * qty,
           },
         ];
       });
-  }, [cart, variants, buyerType]);
+  }, [cart, variants, buyerType, totalBottles, settings, levels, customer]);
 
-  const subtotal = cartLines.reduce((sum, line) => sum + line.subtotal, 0);
+  const subtotal = pricedLines.reduce((sum, line) => sum + line.subtotal, 0);
+
+  const discount = useMemo(
+    () =>
+      computeDiscount({
+        buyerType,
+        lines: pricedLines.map((line) => ({
+          variantId: line.variantId,
+          productId: line.productId,
+          category: line.category,
+          qty: line.qty,
+          unitPrice: line.unitPrice,
+        })),
+        rules,
+        variantSellPrices: Object.fromEntries(
+          variants.map((variant) => [variant.id, variant.sellPrice]),
+        ),
+      }),
+    [pricedLines, rules, variants, buyerType],
+  );
+
   const totals = computeTotals({
     subtotal,
+    discountTotal: discount.discountTotal,
     roundingEnabled: settings?.roundingEnabled ?? true,
     roundingStep: settings?.roundingStep ?? 500,
   });
 
+  const bonusLines = discount.bonusItems.flatMap((bonus) => {
+    const variant = variants.find((item) => item.id === bonus.variantId);
+    if (!variant) return [];
+    return [
+      {
+        variantId: bonus.variantId,
+        qty: bonus.qty,
+        costPrice: variant.costPrice,
+        name: `${variant.productName} ${variant.sizeName}`,
+      },
+    ];
+  });
+
+  const totalCost =
+    pricedLines.reduce((sum, line) => sum + line.costPrice * line.qty, 0) +
+    bonusLines.reduce((sum, line) => sum + line.costPrice * line.qty, 0);
+  const marginWarning =
+    totals.finalTotal < Math.round(totalCost * 1.1) && totalCost > 0;
+
   const paid = paidInput === "" ? totals.finalTotal : Number(paidInput) || 0;
   const change = changeDue(totals.finalTotal, paid);
+
+  const resellerLevelName = pricedLines.find((line) => line.levelName)?.levelName ?? null;
+  const moq = settings?.resellerMoq ?? 24;
+  const resellerBelowMoq =
+    buyerType === "reseller" &&
+    !customer?.resellerLevelId &&
+    totalBottles > 0 &&
+    totalBottles < moq;
 
   const results = useMemo(() => {
     if (buyerType === "umum" || !query.trim()) return [];
@@ -178,16 +266,26 @@ export default function BeliPage() {
   }
 
   async function handleSave() {
-    if (cartLines.length === 0) {
+    if (pricedLines.length === 0) {
       toast("Keranjang masih kosong", "error");
       return;
     }
+
+    if (
+      marginWarning &&
+      !window.confirm(
+        `Margin di bawah 10% (modal ${rupiah(totalCost)}). Lanjutkan transaksi?`,
+      )
+    ) {
+      return;
+    }
+
     setSaving(true);
     try {
-      const transaction = await createTransaction({
+      const result = await createTransaction({
         buyerType,
         customerId: customer?.id ?? null,
-        items: cartLines.map((line) => ({
+        items: pricedLines.map((line) => ({
           variantId: line.variantId,
           qty: line.qty,
         })),
@@ -199,7 +297,7 @@ export default function BeliPage() {
         paymentMethod === "cash" && change > 0
           ? ` Kembali ${rupiah(change)}.`
           : "";
-      toast(`Tersimpan ${rupiah(transaction.finalTotal)}.${changeText}`);
+      toast(`Tersimpan ${rupiah(result.transaction.finalTotal)}.${changeText}`);
 
       setCart({});
       setCustomer(null);
@@ -265,16 +363,20 @@ export default function BeliPage() {
 
       <section className={cardClass}>
         <h2 className={sectionLabelClass}>Keranjang</h2>
-        {cartLines.length === 0 ? (
+        {pricedLines.length === 0 ? (
           <p className="mt-2 text-sm text-ink-soft">Belum ada barang.</p>
         ) : (
           <ul className="mt-1 flex flex-col divide-y divide-line">
-            {cartLines.map((line) => (
-              <li key={line.variantId} className="flex items-center justify-between gap-2 py-2.5">
+            {pricedLines.map((line) => (
+              <li
+                key={line.variantId}
+                className="flex items-center justify-between gap-2 py-2.5"
+              >
                 <span className="text-sm">
                   <span className="font-bold">{line.name}</span>
                   <span className="block text-xs tabular-nums text-ink-soft">
                     {rupiah(line.unitPrice)} × {line.qty}
+                    {line.levelName ? ` · ${line.levelName}` : ""}
                   </span>
                 </span>
                 <span className="flex items-center gap-2">
@@ -293,6 +395,19 @@ export default function BeliPage() {
               </li>
             ))}
           </ul>
+        )}
+
+        {bonusLines.length > 0 && (
+          <div className="mt-3 rounded-control border-2 border-soy-dark/50 bg-cream p-2.5">
+            <p className="text-xs font-bold uppercase tracking-wider text-soy-dark">
+              Bonus
+            </p>
+            {bonusLines.map((line) => (
+              <p key={line.variantId} className="text-sm font-bold">
+                {line.qty} {line.name} gratis
+              </p>
+            ))}
+          </div>
         )}
 
         <div className="mt-3 flex items-center justify-between border-t-2 border-dashed border-ink/30 pt-3">
@@ -323,6 +438,22 @@ export default function BeliPage() {
             </button>
           ))}
         </div>
+
+        {resellerLevelName && (
+          <p className="mt-2 rounded-control border-2 border-pandan/40 bg-pandan/10 p-2 text-xs font-bold text-pandan">
+            Harga grosir aktif: {resellerLevelName}
+          </p>
+        )}
+        {resellerBelowMoq && (
+          <p className="mt-2 rounded-control border-2 border-soy-dark/40 bg-cream p-2 text-xs font-bold text-soy-dark">
+            Minimal {moq} botol untuk harga reseller (sekarang {totalBottles}).
+          </p>
+        )}
+        {customer?.type === "reseller" && customer.suggestedPrice ? (
+          <p className="mt-2 text-xs font-bold text-ink-soft">
+            HJA: {rupiah(customer.suggestedPrice)}
+          </p>
+        ) : null}
 
         {customer && (
           <div className="mt-3 flex items-center justify-between rounded-control border-2 border-ink bg-cream p-2.5">
@@ -441,6 +572,16 @@ export default function BeliPage() {
       </section>
 
       <section className={cardClass}>
+        {discount.ruleName && (
+          <div className="mb-2 flex items-center justify-between text-sm">
+            <span className="font-bold text-pandan">
+              {discount.ruleName}
+            </span>
+            <span className="font-bold tabular-nums text-pandan">
+              −{rupiah(discount.discountTotal)}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold uppercase tracking-wider text-ink-soft">
             Pembulatan
@@ -459,6 +600,11 @@ export default function BeliPage() {
             {rupiah(totals.finalTotal)}
           </span>
         </div>
+        {marginWarning && (
+          <p className="mt-2 rounded-control border-2 border-brick/40 bg-brick/10 p-2 text-xs font-bold text-brick">
+            Margin di bawah 10% (modal {rupiah(totalCost)}).
+          </p>
+        )}
       </section>
 
       <section className={cardClass}>
@@ -534,7 +680,7 @@ export default function BeliPage() {
       <button
         type="button"
         onClick={handleSave}
-        disabled={saving || cartLines.length === 0}
+        disabled={saving || pricedLines.length === 0}
         className="rounded-card border-2 border-ink bg-soy py-4 text-base font-extrabold shadow-hard transition active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-40"
       >
         {saving ? "Menyimpan..." : "SIMPAN TRANSAKSI"}
@@ -548,9 +694,7 @@ export default function BeliPage() {
                 <p className="text-sm font-extrabold">
                   {keypadVariant.productName} {keypadVariant.sizeName}
                 </p>
-                <p className="text-xs text-ink-soft">
-                  Isi jumlah lalu simpan
-                </p>
+                <p className="text-xs text-ink-soft">Isi jumlah lalu simpan</p>
               </div>
               <button
                 type="button"

@@ -14,6 +14,7 @@ import { downloadBackup } from "@/lib/backup";
 import { getDb } from "@/lib/db";
 import { formatTime, isTodayWib, rupiah } from "@/lib/format";
 import { listVariantsWithProduct } from "@/lib/repos/products";
+import { listReceivables } from "@/lib/repos/transactions";
 import { getSettings } from "@/lib/settings";
 
 export default function BerandaPage() {
@@ -22,6 +23,7 @@ export default function BerandaPage() {
   const items = useLiveQuery(() => getDb().transactionItems.toArray(), [], []);
   const variants = useLiveQuery(() => listVariantsWithProduct(false), [], []);
   const settings = useLiveQuery(() => getSettings(), [], null);
+  const receivables = useLiveQuery(() => listReceivables(), [], []);
 
   const activeToday = transactions.filter(
     (transaction) => !transaction.cancelled && isTodayWib(transaction.occurredAt),
@@ -95,6 +97,22 @@ export default function BerandaPage() {
             Backup sekarang
           </button>
         </section>
+      )}
+
+      {receivables.length > 0 && (
+        <Link
+          href="/piutang"
+          className="flex items-center justify-between rounded-card border-2 border-brick/40 bg-brick/10 p-4"
+        >
+          <span className="text-sm font-bold text-brick">
+            Piutang belum dibayar
+          </span>
+          <span className="text-sm font-extrabold tabular-nums text-brick">
+            {rupiah(
+              receivables.reduce((sum, item) => sum + item.remaining, 0),
+            )}
+          </span>
+        </Link>
       )}
 
       {missingCost.length > 0 && (

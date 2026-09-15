@@ -25,16 +25,23 @@ After code changes, run `npm run restart` so the phone gets the update.
 
 - Next.js 16 App Router with `output: "export"` (static HTML/JS). No server actions,
   no API routes, no database server.
-- `src/lib/db.ts` — Dexie schema (version 1) for all tables. `getDb()` is lazy so
+- `src/lib/db.ts` — Dexie schema (version 2) for all tables. `getDb()` is lazy so
   nothing touches IndexedDB during SSR/prerender. `resetDbInstance()` exists for tests.
-- `src/lib/repos/*` — data access (`products`, `customers`, `transactions`, `stock`).
-  Transaction creation is atomic and writes snapshots + stock movements.
+- `src/lib/repos/*` — data access (`products`, `customers`, `transactions`, `stock`,
+  `stock-days`, `discounts`, `returns`). Transaction creation is atomic: it resolves
+  tier prices, picks the best discount, writes snapshots, bonus items and stock
+  movements, and returns margin info.
+- `src/lib/discounts.ts` — pure discount engine: 4 effect types (percent, amount,
+  special price, bonus product), no stacking (best value for buyer wins), priority
+  tie-break, condition types (min bottles/amount, multiples). `src/lib/reseller.ts` —
+  flat tier pricing, MOQ, locked level, margin warning. Both heavily tested.
 - `src/lib/pricing.ts` — pure math: rounding (default Rp 500), margins, change,
   payment status. `src/lib/search.ts` — phone/name normalization + basic ranking.
   `src/lib/backup.ts` — JSON export/import of every table. `src/lib/pin.ts` — PIN hash
   (Web Crypto). `src/lib/seed.ts` — first-run starter data (default PIN `1234`).
-- `src/app/(app)/*` — pages: `/` Beranda, `/beli` POS, `/pelanggan`, `/stok`, `/setting`.
-  `src/app/(app)/layout.tsx` is the client shell: ToastProvider → PinGate → header + nav.
+- `src/app/(app)/*` — pages: `/` Beranda, `/beli` POS, `/pelanggan`, `/piutang`,
+  `/stok`, `/setting`. `src/app/(app)/layout.tsx` is the client shell:
+  ToastProvider → PinGate → header + nav.
 - Styling: all colors/fonts/radii/shadows live in `src/app/globals.css` (`@theme`
   tokens: `bg-canvas`, `text-ink`, `bg-soy`, `border-line`, …). Shared class
   primitives in `src/components/ui.ts`; inline SVG icons in `src/components/icons.tsx`.
@@ -45,14 +52,20 @@ After code changes, run `npm run restart` so the phone gets the update.
 
 - Snapshot `unitPrice` and `unitCost` on every transaction item. Changing prices
   today must never alter past reports.
-- Every v1 transaction = 1 bonus point is **obsolete**. Accumulation bonuses are not
-  active; per-transaction discounts come later via the discount engine (Fase 2).
+- Discounts: collect all eligible rules, apply only the single most valuable one
+  (tie-break: highest priority), store `discountRuleName` on the transaction. Never stack.
+- Margin guard: warn (red confirm) when final total < total cost × 1.1.
+- Bonus products (`isBonus` items) reduce stock, have price 0, and count into HPP at cost.
+- Reseller pricing is a flat per-bottle tier price (not a percentage): highest
+  min-bottles level reached wins; MOQ must be met unless the customer has a locked
+  level. When no levels exist, the variant's base `resellerPrice` applies.
+- Stock day: entering the opening count adjusts the balance to the physical count;
+  sales auto-decrement; additions/damage are logged; closing stores expected vs actual
+  and writes a `correction` movement for the difference.
 - **No manual date inputs anywhere.** Transaction/expense dates are automatic.
 - Rounding: final total rounds to the nearest `roundingStep` (default 500), toggle in Setting.
 - Stock may go negative (selling when stock is 0 is allowed, with a warning badge).
-- Selling decrements stock immediately and writes a `stockMovements` row.
-- Reseller pricing is a flat per-bottle price (not a percentage); tiering comes in Fase 2.
-- CSV exports were replaced by the JSON backup; reports (CSV + print PDF) come in Fase 3.
+- Reports (CSV + print PDF) and expenses/cash-close come in Fase 3.
 - PIN is a local UI gate only — it is not server security.
 
 ## Safety rules
@@ -65,8 +78,9 @@ After code changes, run `npm run restart` so the phone gets the update.
 ## Roadmap (per revision doc)
 
 - **Fase 1 (done):** schema, products/variants/costs, POS Beli, basic customers, PIN, backup.
-- **Fase 2:** stock days (opening/damage/addition/closing), discount engine + simulator +
-  margin guard, reseller tiers/MOQ/receivables/returns.
-- **Fase 3:** expenses, daily cash close, full financial Beranda + charts, reports.
+- **Fase 2 (done):** stock days (opening/damage/addition/closing), discount engine +
+  simulator + margin guard, reseller tiers/MOQ/receivables/returns, piutang page.
+- **Fase 3:** expenses, daily cash close, full financial Beranda + charts, reports
+  (CSV + print PDF).
 - **Fase 4:** fuzzy search, service worker/offline install (needs HTTPS), cancel last
-  transaction, attach member, audit log, WhatsApp receipt, Excel/PDF exports.
+  transaction, attach member, audit log, WhatsApp receipt.

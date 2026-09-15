@@ -93,7 +93,7 @@ describe("transactions", () => {
     await ensureSeeded();
     const [small] = await listVariants(true);
 
-    const transaction = await createTransaction({
+    const { transaction } = await createTransaction({
       buyerType: "umum",
       customerId: null,
       paymentMethod: "cash",
@@ -124,7 +124,7 @@ describe("transactions", () => {
     await ensureSeeded();
     const [small] = await listVariants(true);
 
-    const transaction = await createTransaction({
+    const { transaction } = await createTransaction({
       buyerType: "umum",
       customerId: null,
       paymentMethod: "cash",
@@ -133,7 +133,7 @@ describe("transactions", () => {
 
     await updateVariant(small.id, { sellPrice: 6000, costPrice: 3500 });
 
-    const transaction2 = await createTransaction({
+    const { transaction: transaction2 } = await createTransaction({
       buyerType: "umum",
       customerId: null,
       paymentMethod: "cash",
@@ -150,9 +150,10 @@ describe("transactions", () => {
 
   it("uses the reseller price for resellers", async () => {
     await ensureSeeded();
+    await updateSettings({ resellerMoq: 1 });
     const [small] = await listVariants(true);
 
-    const transaction = await createTransaction({
+    const { transaction } = await createTransaction({
       buyerType: "reseller",
       customerId: null,
       paymentMethod: "cash",
@@ -168,7 +169,7 @@ describe("transactions", () => {
     await ensureSeeded();
     const [small] = await listVariants(true);
 
-    const unpaid = await createTransaction({
+    const { transaction: unpaid } = await createTransaction({
       buyerType: "reseller",
       customerId: null,
       paymentMethod: "transfer",
@@ -177,7 +178,7 @@ describe("transactions", () => {
     });
     assert.equal(unpaid.paymentStatus, "unpaid");
 
-    const partial = await createTransaction({
+    const { transaction: partial } = await createTransaction({
       buyerType: "reseller",
       customerId: null,
       paymentMethod: "transfer",

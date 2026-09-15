@@ -198,6 +198,34 @@ export interface AuditLog {
   newData: string | null;
 }
 
+export interface StockOpening {
+  id: ID;
+  date: string;
+  variantId: ID;
+  qty: number;
+  createdAt: number;
+}
+
+export interface StockClosing {
+  id: ID;
+  date: string;
+  closedAt: number;
+  note: string | null;
+}
+
+export interface StockClosingItem {
+  id: ID;
+  closingId: ID;
+  variantId: ID;
+  openingQty: number | null;
+  addedQty: number;
+  soldQty: number;
+  damagedQty: number;
+  expectedQty: number | null;
+  actualQty: number;
+  difference: number | null;
+}
+
 export interface Setting {
   key: string;
   value: string;

@@ -13,7 +13,10 @@ import type {
   ResellerLevel,
   ResellerLevelPrice,
   Setting,
+  StockClosing,
+  StockClosingItem,
   StockMovement,
+  StockOpening,
   Transaction,
   TransactionItem,
 } from "./types";
@@ -35,6 +38,9 @@ export class TokoDB extends Dexie {
   cashSessions!: Table<CashSession, string>;
   auditLog!: Table<AuditLog, string>;
   settings!: Table<Setting, string>;
+  stockOpenings!: Table<StockOpening, string>;
+  stockClosings!: Table<StockClosing, string>;
+  stockClosingItems!: Table<StockClosingItem, string>;
 
   constructor() {
     super("toko-db");
@@ -55,6 +61,12 @@ export class TokoDB extends Dexie {
       cashSessions: "id, date",
       auditLog: "id, at, table, recordId",
       settings: "key",
+    });
+
+    this.version(2).stores({
+      stockOpenings: "id, date, variantId, [date+variantId]",
+      stockClosings: "id, date, closedAt",
+      stockClosingItems: "id, closingId, variantId",
     });
   }
 }

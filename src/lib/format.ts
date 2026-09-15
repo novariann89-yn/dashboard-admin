@@ -63,3 +63,14 @@ export function isTodayWib(
   const start = startOfTodayWib(now);
   return date.getTime() >= start.getTime() && date.getTime() < start.getTime() + 86400000;
 }
+
+export function wibDateString(value: Date | number = new Date()): string {
+  const date = toDate(value) ?? new Date();
+  const wib = new Date(date.getTime() + WIB_OFFSET_MS);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${wib.getUTCFullYear()}-${pad(wib.getUTCMonth() + 1)}-${pad(wib.getUTCDate())}`;
+}
+
+export function daysBetween(from: number, to = Date.now()): number {
+  return Math.max(0, Math.floor((to - from) / 86400000));
+}

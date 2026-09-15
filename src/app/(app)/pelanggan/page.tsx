@@ -1,8 +1,8 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { IconX } from "@/components/icons";
 import { useToast } from "@/components/toast";
 import {
   badgeClass,
@@ -10,6 +10,7 @@ import {
   cardClass,
   inputClass,
   sectionLabelClass,
+  statusVoidClass,
 } from "@/components/ui";
 import { getDb } from "@/lib/db";
 import { formatDate, rupiah } from "@/lib/format";
@@ -19,8 +20,10 @@ import {
   updateCustomer,
 } from "@/lib/repos/customers";
 import { listVariantsWithProduct } from "@/lib/repos/products";
+import { recordReturn } from "@/lib/repos/returns";
+import { recordPayment } from "@/lib/repos/transactions";
 import { formatPhone, searchCustomers } from "@/lib/search";
-import type { Customer, CustomerType } from "@/lib/types";
+import type { Customer, CustomerType, Transaction } from "@/lib/types";
 
 export default function PelangganPage() {
   const toast = useToast();
@@ -102,7 +105,12 @@ export default function PelangganPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-extrabold tracking-tight">Pelanggan</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-extrabold tracking-tight">Pelanggan</h1>
+        <Link href="/piutang" className="text-xs font-bold text-ink-soft underline">
+          Piutang →
+        </Link>
+      </div>
 
       <div className="grid grid-cols-2 gap-2">
         {(["member", "reseller"] as CustomerType[]).map((type) => (
@@ -230,6 +238,14 @@ export default function PelangganPage() {
   );
 }
 
+type ItemRow = {
+  transactionId: string;
+  variantId: string;
+  qty: number;
+  unitPrice: number;
+  unitCost: number;
+};
+
 function CustomerDetail({
   customer,
   transactions,
@@ -237,15 +253,9 @@ function CustomerDetail({
   variants,
 }: {
   customer: Customer;
-  transactions: {
-    id: string;
-    customerId: string | null;
-    cancelled: boolean;
-    occurredAt: number;
-    finalTotal: number;
-  }[];
-  items: { transactionId: string; variantId: string; qty: number }[];
-  variants: { id: string; productName: string; sizeName: string }[];
+  transactions: Transaction[];
+  items: ItemRow[];
+  variants: { id: string; productName: string; sizeName: string; sellPrice: number }[];
 }) {
   const toast = useToast();
   const [name, setName] = useState(customer.name);
@@ -256,8 +266,15 @@ function CustomerDetail({
     customer.suggestedPrice ?? 0,
   );
 
+  const [returnVariantId, setReturnVariantId] = useState("");
+  const [returnQty, setReturnQty] = useState("");
+  const [returnSellable, setReturnSellable] = useState(true);
+  const [returnRefund, setReturnRefund] = useState("");
+  const [payAmounts, setPayAmounts] = useState<Record<string, string>>({});
+
   const own = transactions.filter(
-    (transaction) => transaction.customerId === customer.id && !transaction.cancelled,
+    (transaction) =>
+      transaction.customerId === customer.id && !transaction.cancelled,
   );
   const ownIds = new Set(own.map((transaction) => transaction.id));
   const ownItems = items.filter((item) => ownIds.has(item.transactionId));
@@ -268,6 +285,14 @@ function CustomerDetail({
   }
   const totalBottles = ownItems.reduce((sum, item) => sum + item.qty, 0);
   const totalSpend = own.reduce((sum, transaction) => sum + transaction.finalTotal, 0);
+  const totalProfit = ownItems.reduce(
+    (sum, item) => sum + (item.unitPrice - item.unitCost) * item.qty,
+    0,
+  );
+
+  const receivables = own.filter(
+    (transaction) => transaction.paymentStatus !== "paid",
+  );
 
   async function handleSave() {
     try {
@@ -284,20 +309,60 @@ function CustomerDetail({
     }
   }
 
+  async function handleReturn() {
+    if (!returnVariantId || !returnQty) {
+      toast("Pilih produk dan isi jumlah", "error");
+      return;
+    }
+    const variant = variants.find((item) => item.id === returnVariantId);
+    const lastPrice =
+      [...ownItems]
+        .reverse()
+        .find((item) => item.variantId === returnVariantId && item.unitPrice > 0)
+        ?.unitPrice ?? variant?.sellPrice ?? 0;
+    const refund =
+      returnRefund === ""
+        ? lastPrice * (Number(returnQty) || 0)
+        : Number(returnRefund) || 0;
+
+    try {
+      await recordReturn({
+        customerId: customer.id,
+        variantId: returnVariantId,
+        qty: Number(returnQty),
+        sellable: returnSellable,
+        refundValue: refund,
+      });
+      setReturnQty("");
+      setReturnRefund("");
+      toast("Retur dicatat");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Gagal mencatat", "error");
+    }
+  }
+
   return (
     <div className="mb-3 rounded-card border-2 border-line bg-canvas p-3">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
-            Total botol
+            Botol
           </p>
           <p className="text-lg font-extrabold tabular-nums">{totalBottles}</p>
         </div>
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
-            Total belanja
+            Belanja
           </p>
           <p className="text-lg font-extrabold tabular-nums">{rupiah(totalSpend)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
+            Laba
+          </p>
+          <p className="text-lg font-extrabold tabular-nums">
+            {rupiah(totalProfit)}
+          </p>
         </div>
       </div>
 
@@ -317,6 +382,112 @@ function CustomerDetail({
             );
           })}
         </ul>
+      )}
+
+      {receivables.length > 0 && (
+        <div className="mt-3 rounded-control border-2 border-brick/40 bg-brick/5 p-2">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-brick">
+            Piutang
+          </p>
+          {receivables.map((transaction) => (
+            <div key={transaction.id} className="mt-1 flex items-center gap-2">
+              <span className="flex-1 text-xs tabular-nums">
+                {formatDate(transaction.occurredAt)} ·{" "}
+                <span className="font-bold">
+                  {rupiah(transaction.finalTotal - transaction.paidAmount)}
+                </span>
+              </span>
+              <input
+                value={payAmounts[transaction.id] ?? ""}
+                onChange={(event) =>
+                  setPayAmounts((current) => ({
+                    ...current,
+                    [transaction.id]: event.target.value,
+                  }))
+                }
+                inputMode="numeric"
+                placeholder="penuh"
+                className="w-20 rounded border border-line bg-white px-2 py-1 text-right text-xs font-bold tabular-nums"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  const remaining = transaction.finalTotal - transaction.paidAmount;
+                  const raw = payAmounts[transaction.id];
+                  await recordPayment(
+                    transaction.id,
+                    raw === undefined || raw === "" ? remaining : Number(raw),
+                  );
+                  toast("Pembayaran dicatat");
+                  setPayAmounts((current) => ({
+                    ...current,
+                    [transaction.id]: "",
+                  }));
+                }}
+                className="rounded-control border-2 border-ink bg-soy px-2 py-1 text-[11px] font-bold"
+              >
+                Terima
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {customer.type === "reseller" && (
+        <div className="mt-3 rounded-control border border-line bg-white p-2">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
+            Catat retur
+          </p>
+          <div className="mt-2 flex flex-col gap-2">
+            <select
+              value={returnVariantId}
+              onChange={(event) => {
+                setReturnVariantId(event.target.value);
+                setReturnRefund("");
+              }}
+              className={`${inputClass} text-xs`}
+            >
+              <option value="">Pilih produk</option>
+              {variants.map((variant) => (
+                <option key={variant.id} value={variant.id}>
+                  {variant.productName} {variant.sizeName}
+                </option>
+              ))}
+            </select>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                value={returnQty}
+                onChange={(event) => setReturnQty(event.target.value)}
+                inputMode="numeric"
+                placeholder="Jumlah"
+                className={`${inputClass} text-right text-xs tabular-nums`}
+              />
+              <input
+                value={returnRefund}
+                onChange={(event) => setReturnRefund(event.target.value)}
+                inputMode="numeric"
+                placeholder="Nilai retur (otomatis)"
+                className={`${inputClass} text-right text-xs tabular-nums`}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-xs font-bold">
+              <input
+                type="checkbox"
+                checked={returnSellable}
+                onChange={(event) => setReturnSellable(event.target.checked)}
+                className="h-4 w-4 accent-soy-dark"
+              />
+              Masih layak jual (stok bertambah)
+            </label>
+            <button
+              type="button"
+              onClick={handleReturn}
+              className="rounded-control border-2 border-ink bg-soy py-1.5 text-xs font-bold"
+            >
+              Simpan retur
+            </button>
+          </div>
+        </div>
       )}
 
       <div className="mt-3 flex flex-col gap-2">
