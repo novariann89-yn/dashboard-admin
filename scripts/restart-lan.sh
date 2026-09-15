@@ -7,15 +7,15 @@ echo "== Build ulang =="
 npm run build
 
 echo "== Hentikan server lama =="
-pkill -f "[n]ext-server" 2>/dev/null || true
+pkill -f "[s]erve-lan" 2>/dev/null || true
 
 if [[ "${1:-}" == "--detach" ]]; then
   LOG_FILE="${TMPDIR:-/tmp}/toko-mas-andik.log"
   echo "== Start server (background) =="
   setsid bash -c "npm run lan > \"$LOG_FILE\" 2>&1" < /dev/null > /dev/null 2>&1 &
-  sleep 3
-  if curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:3000/login"; then
-    echo "Server jalan di port 3000."
+  sleep 2
+  if curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:3000/"; then
+    echo "Server jalan."
     echo "Alamat untuk HP: http://$(hostname -I | awk '{print $1}'):3000"
     echo "Log: $LOG_FILE"
     echo "Hentikan dengan: npm run stop"

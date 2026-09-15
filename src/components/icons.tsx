@@ -121,3 +121,32 @@ export function IconArrowLeft(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconBox(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3 8.5 12 3l9 5.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8.5Z" />
+      <path d="M3 8.5 12 14l9-5.5" />
+      <path d="M12 14v7" />
+    </Svg>
+  );
+}
+
+export function IconX(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6 6l12 12" />
+      <path d="M18 6 6 18" />
+    </Svg>
+  );
+}
+
+export function IconDelete(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M21 5H9L3 12l6 7h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z" />
+      <path d="m15 9-6 6" />
+      <path d="m9 9 6 6" />
+    </Svg>
+  );
+}

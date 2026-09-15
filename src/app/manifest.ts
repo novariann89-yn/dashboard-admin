@@ -1,10 +1,12 @@
 import type { MetadataRoute } from "next";
 
+export const dynamic = "force-static";
+
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Toko Mas Andik",
-    short_name: "Toko Andik",
-    description: "Dashboard member dan pembelian",
+    name: "Dashboard Admin",
+    short_name: "Dashboard",
+    description: "Dashboard penjualan, pelanggan, dan stok",
     start_url: "/",
     display: "standalone",
     background_color: "#f7f2e8",

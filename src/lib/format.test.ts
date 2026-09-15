@@ -1,41 +1,29 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { csvDate, csvDateTime, parseWibDateTimeLocal } from "./format";
+import { startOfTodayWib, rupiah, formatDateTime, isTodayWib } from "./format";
 
-describe("parseWibDateTimeLocal", () => {
-  it("interprets datetime-local as Asia/Jakarta time", () => {
-    const date = parseWibDateTimeLocal("2026-09-14T14:30");
-    assert.equal(date?.toISOString(), "2026-09-14T07:30:00.000Z");
-  });
-
-  it("treats midnight WIB correctly", () => {
-    const date = parseWibDateTimeLocal("2026-01-02T00:00");
-    assert.equal(date?.toISOString(), "2026-01-01T17:00:00.000Z");
-  });
-
-  it("rejects malformed input", () => {
-    assert.equal(parseWibDateTimeLocal(""), null);
-    assert.equal(parseWibDateTimeLocal("abc"), null);
-    assert.equal(parseWibDateTimeLocal("2026-09-14"), null);
-  });
-
-  it("rejects out-of-range values", () => {
-    assert.equal(parseWibDateTimeLocal("2026-13-01T10:00"), null);
-    assert.equal(parseWibDateTimeLocal("2026-02-30T10:00"), null);
-    assert.equal(parseWibDateTimeLocal("2026-09-14T25:00"), null);
-    assert.equal(parseWibDateTimeLocal("2026-09-14T10:75"), null);
+describe("rupiah", () => {
+  it("formats with thousand separators", () => {
+    assert.equal(rupiah(15000), "Rp 15.000");
+    assert.equal(rupiah(0), "Rp 0");
   });
 });
 
-describe("csv date helpers", () => {
-  it("formats a date in WIB", () => {
-    const date = new Date("2026-09-14T07:30:00.000Z");
-    assert.equal(csvDate(date), "2026-09-14");
-    assert.equal(csvDateTime(date), "2026-09-14 14:30");
+describe("WIB helpers", () => {
+  it("starts the day at midnight WIB (17:00 UTC previous day)", () => {
+    const start = startOfTodayWib(new Date("2026-09-14T07:30:00.000Z"));
+    assert.equal(start.toISOString(), "2026-09-13T17:00:00.000Z");
   });
 
-  it("returns empty string for missing dates", () => {
-    assert.equal(csvDate(null), "");
-    assert.equal(csvDateTime(undefined), "");
+  it("detects today in WIB", () => {
+    const now = new Date("2026-09-14T07:30:00.000Z");
+    assert.equal(isTodayWib(new Date("2026-09-14T07:00:00.000Z"), now), true);
+    assert.equal(isTodayWib(new Date("2026-09-13T16:59:00.000Z"), now), false);
+  });
+
+  it("formats date-time in Jakarta time", () => {
+    const formatted = formatDateTime(new Date("2026-09-14T07:30:00.000Z"));
+    assert.match(formatted, /14/);
+    assert.match(formatted, /14\.30|14:30/);
   });
 });

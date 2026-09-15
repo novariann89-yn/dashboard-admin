@@ -9,11 +9,11 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Toko Mas Andik",
-  description: "Dashboard member dan pembelian",
+  title: "Dashboard Admin",
+  description: "Dashboard penjualan, pelanggan, dan stok",
   appleWebApp: {
     capable: true,
-    title: "Toko Andik",
+    title: "Dashboard Admin",
     statusBarStyle: "default",
   },
 };

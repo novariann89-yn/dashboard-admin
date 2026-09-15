@@ -1,10 +1,8 @@
-# AGENTS.md — dashboard-admin (Toko Mas Andik)
+# AGENTS.md — Dashboard Admin (v2, offline-first)
 
-Admin dashboard for a bottled soy milk stall (Toko Mas Andik): member registry by
-phone number, purchase recording, automatic free-product bonus, daily sales stats,
-and CSV export. UI is in Indonesian, mobile-first. Production runs on the LAN
-(`npm run lan`, port 3000) from this machine; deployment to Vercel + Turso is
-documented in `DEPLOY.md`.
+Admin/POS dashboard for a bottled soy milk stall. **All data lives on the phone**
+(IndexedDB via Dexie); the app is a static export (folder `out/`) and must run
+fully offline at the market. UI is in Indonesian. A 4-digit local PIN gates the UI.
 
 Remote: `git@github.com:novariann89-yn/dashboard-admin.git` (SSH auth as `novariann89-yn`).
 
@@ -12,69 +10,63 @@ Remote: `git@github.com:novariann89-yn/dashboard-admin.git` (SSH auth as `novari
 
 | Task | Command |
 | --- | --- |
-| Dev server (hot reload) | `npm run dev -- -p 3001` — use 3001; 3000 is used by the LAN server |
-| Tests | `npm test` (node:test + tsx, 38 tests) |
+| Dev server (hot reload) | `npm run dev` (use `-- -p 3001` if the LAN server is running on 3000) |
+| Tests | `npm test` (node:test + tsx, fake-indexeddb for Dexie tests) |
 | Type check | `npm run typecheck` |
-| Production build | `npm run build` |
-| Rebuild + restart LAN server | `npm run restart` |
-| Stop LAN server | `npm run stop` |
-| Foreground server (watch logs) | `npm run lan` |
-| Preview data | `npm run db:studio` |
-| Schema change flow | edit `src/db/schema.ts` → `npm run db:generate` → `npm run db:migrate` |
-| Seed products + bonus rule | `npm run db:seed` (idempotent) |
-| Hash a new admin PIN | `npm run hash-pin -- <pin>` |
+| Static build (→ `out/`) | `npm run build` |
+| Rebuild + serve on LAN + print phone URL | `npm run restart` |
+| Stop the static server | `npm run stop` |
+| Foreground static server (logs) | `npm run lan` |
 
-Before declaring any task done: `npm test`, `npm run typecheck`, `npm run build`.
+Before declaring work done: `npm test`, `npm run typecheck`, `npm run build`.
 After code changes, run `npm run restart` so the phone gets the update.
 
 ## Architecture
 
-- Next.js 16 App Router, React 19, Tailwind v4 (CSS-first `@theme` tokens),
-  Drizzle ORM + libSQL (local `file:./local.db`, Turso in production).
-- `src/lib/purchase-service.ts` — core business logic (`recordPurchase`,
-  `voidPurchase`). The integration tests in `purchase-service.test.ts` create a
-  temp SQLite DB and apply the SQL files in `drizzle/` themselves.
-- `src/lib/bonus.ts` (pure bonus math), `src/lib/phone.ts` (normalization),
-  `src/lib/csv.ts` (CSV), `src/lib/auth.ts` + `src/lib/pin.ts` (PIN session),
-  `src/lib/format.ts` (WIB dates, rupiah).
-- `src/actions/*.ts` — server actions, thin wrappers; every one calls
-  `requireSession()` first. Business logic belongs in `src/lib`, not actions.
-- `src/app/(admin)/*` — pages: Beranda, Pembelian, Member, Riwayat, Pengaturan.
-  `src/app/export/*` — authenticated CSV download endpoints. `src/app/login` — PIN.
-- `src/db/schema.ts` — tables: products, members, purchases, purchase_items,
-  bonus_rules, bonus_events.
-- Styling: all colors/fonts/radii/shadows live in `src/app/globals.css`. Use the
-  tokens (`bg-canvas`, `text-ink`, `bg-soy`, `border-line`, …). Do not introduce
-  hardcoded Tailwind grays or new palettes. Shared class primitives in
-  `src/components/ui.ts`; icons in `src/components/icons.tsx` (inline SVG, no deps).
-  Interactive bits: `src/components/purchase-items.tsx` (qty steppers),
-  `src/components/bottom-nav.tsx`.
+- Next.js 16 App Router with `output: "export"` (static HTML/JS). No server actions,
+  no API routes, no database server.
+- `src/lib/db.ts` — Dexie schema (version 1) for all tables. `getDb()` is lazy so
+  nothing touches IndexedDB during SSR/prerender. `resetDbInstance()` exists for tests.
+- `src/lib/repos/*` — data access (`products`, `customers`, `transactions`, `stock`).
+  Transaction creation is atomic and writes snapshots + stock movements.
+- `src/lib/pricing.ts` — pure math: rounding (default Rp 500), margins, change,
+  payment status. `src/lib/search.ts` — phone/name normalization + basic ranking.
+  `src/lib/backup.ts` — JSON export/import of every table. `src/lib/pin.ts` — PIN hash
+  (Web Crypto). `src/lib/seed.ts` — first-run starter data (default PIN `1234`).
+- `src/app/(app)/*` — pages: `/` Beranda, `/beli` POS, `/pelanggan`, `/stok`, `/setting`.
+  `src/app/(app)/layout.tsx` is the client shell: ToastProvider → PinGate → header + nav.
+- Styling: all colors/fonts/radii/shadows live in `src/app/globals.css` (`@theme`
+  tokens: `bg-canvas`, `text-ink`, `bg-soy`, `border-line`, …). Shared class
+  primitives in `src/components/ui.ts`; inline SVG icons in `src/components/icons.tsx`.
+- Tests use `fake-indexeddb/auto` (import it before any repo/db import) and
+  `resetDbInstance()` between tests.
 
-## Business rules (do not change without user sign-off)
+## Business rules (from the revision spec — do not change without sign-off)
 
-- 1 transaction = 1 bonus progress point, regardless of bottle quantity.
-- Reaching the threshold creates a bonus event and resets progress by subtracting
-  the threshold (remainder preserved).
-- Void is blocked when the purchase produced a bonus event; otherwise member
-  counters are rolled back.
-- Times are stored UTC and displayed/entered as WIB (Asia/Jakarta). Backdated
-  purchases are allowed; future dates are rejected.
-- CSV exports use `;` as delimiter plus a UTF-8 BOM (Indonesian Excel).
-- Phone numbers are canonicalized to `08xxxxxxxxxx`; `+62`/`62`/`8…` all normalize
-  to the same value.
+- Snapshot `unitPrice` and `unitCost` on every transaction item. Changing prices
+  today must never alter past reports.
+- Every v1 transaction = 1 bonus point is **obsolete**. Accumulation bonuses are not
+  active; per-transaction discounts come later via the discount engine (Fase 2).
+- **No manual date inputs anywhere.** Transaction/expense dates are automatic.
+- Rounding: final total rounds to the nearest `roundingStep` (default 500), toggle in Setting.
+- Stock may go negative (selling when stock is 0 is allowed, with a warning badge).
+- Selling decrements stock immediately and writes a `stockMovements` row.
+- Reseller pricing is a flat per-bottle price (not a percentage); tiering comes in Fase 2.
+- CSV exports were replaced by the JSON backup; reports (CSV + print PDF) come in Fase 3.
+- PIN is a local UI gate only — it is not server security.
 
 ## Safety rules
 
-- NEVER read, modify, or commit `.env.local`, `local.db`, or any secret. Both are
-  gitignored; verify with `git status --short` before committing.
-- Schema changes always go through `db:generate` + `db:migrate`, and migration
-  files under `drizzle/` must be committed.
-- LAN mode serves a production build with `COOKIE_SECURE=false` (see
-  `scripts/restart-lan.sh`). Do not remove that, or phone login breaks over HTTP.
+- NEVER commit `.env.local`, `local.db` (unused legacy), or any secret.
+  Verify with `git status --short` before committing.
+- Data recovery: backup/restore JSON in Setting (`src/lib/backup.ts`).
 - Only commit/push when the user explicitly asks.
 
-## Deployment
+## Roadmap (per revision doc)
 
-See `DEPLOY.md`. Create the Turso database **without** `--tursodb` (this app uses
-the libSQL driver). Required env vars: `DATABASE_URL`, `DATABASE_AUTH_TOKEN`,
-`SESSION_SECRET`, `ADMIN_PIN_HASH`.
+- **Fase 1 (done):** schema, products/variants/costs, POS Beli, basic customers, PIN, backup.
+- **Fase 2:** stock days (opening/damage/addition/closing), discount engine + simulator +
+  margin guard, reseller tiers/MOQ/receivables/returns.
+- **Fase 3:** expenses, daily cash close, full financial Beranda + charts, reports.
+- **Fase 4:** fuzzy search, service worker/offline install (needs HTTPS), cancel last
+  transaction, attach member, audit log, WhatsApp receipt, Excel/PDF exports.

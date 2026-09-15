@@ -1,6 +1,6 @@
 {
   "name": "dashbord-admin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "engines": {
     "node": ">=20.9.0"
@@ -8,21 +8,15 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lan": "COOKIE_SECURE=false next start -p 3000",
-    "restart": "bash scripts/restart-lan.sh --detach",
-    "stop": "pkill -f \"[n]ext-server\" || true",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx src/db/seed.ts",
-    "db:studio": "drizzle-kit studio",
-    "hash-pin": "tsx scripts/hash-pin.ts"
+    "lan": "node scripts/serve-lan.mjs",
+    "restart": "bash scripts/restart-lan.sh --detach",
+    "stop": "pkill -f \"[s]erve-lan\" || true"
   },
   "dependencies": {
-    "@libsql/client": "^0.18.0",
-    "drizzle-orm": "^0.45.2",
+    "dexie": "^4.0.0",
+    "dexie-react-hooks": "^1.1.0",
     "next": "^16.3.5",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
@@ -32,7 +26,7 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "drizzle-kit": "^0.31.10",
+    "fake-indexeddb": "^6.0.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.13",
     "typescript": "^5"
