@@ -70,4 +70,7 @@ export async function importBackup(json: string): Promise<void> {
       }
     }
   });
+
+  // Restoring resets the PIN so a forgotten PIN can be recovered from a backup.
+  await db.settings.bulkDelete(["pinHash", "pinSalt", "pinIsDefault"]);
 }

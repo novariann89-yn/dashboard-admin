@@ -79,7 +79,9 @@ export default function SettingPage() {
         <h2 className={sectionLabelClass}>Backup data</h2>
         <p className="mt-1 text-xs text-ink-soft">
           Data hanya tersimpan di HP ini. Unduh backup secara berkala, dan
-          simpan filenya di tempat aman (Google Drive / komputer).
+          simpan filenya di tempat aman (Google Drive / komputer). Kalau PIN
+          lupa: hapus data situs di browser, buka aplikasi, lalu pulihkan dari
+          backup (PIN akan diatur ulang).
         </p>
         <div className="mt-3 flex flex-col gap-2">
           <button
@@ -113,7 +115,7 @@ export default function SettingPage() {
                 }
                 try {
                   await importBackup(text);
-                  toast("Data dipulihkan, memuat ulang...");
+                  toast("Data dipulihkan. Atur PIN baru...");
                   setTimeout(() => window.location.reload(), 800);
                 } catch (error) {
                   toast(
