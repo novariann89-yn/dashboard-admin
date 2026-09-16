@@ -410,10 +410,11 @@ export default function BeliPage() {
           {variants.map((variant) => {
             const price =
               buyerType === "reseller" ? variant.resellerPrice : variant.sellPrice;
+            const remaining = variant.stock - (cart[variant.id] ?? 0);
             const stockClass =
-              variant.stock <= 0
+              remaining <= 0
                 ? "border-brick/50 bg-brick/5"
-                : variant.stock <= 20
+                : remaining <= 20
                   ? "border-soy-dark/50 bg-cream"
                   : "border-ink bg-surface";
             return (
@@ -435,8 +436,12 @@ export default function BeliPage() {
                 <span className="mt-1 block text-sm font-extrabold tabular-nums">
                   {rupiah(price)}
                 </span>
-                <span className="mt-1 block text-[10px] font-bold tabular-nums text-ink-soft">
-                  Stok {variant.stock}
+                <span
+                  className={`mt-1 block text-[10px] font-bold tabular-nums ${
+                    remaining <= 0 ? "text-brick" : "text-ink-soft"
+                  }`}
+                >
+                  Stok {remaining}
                 </span>
               </button>
             );
