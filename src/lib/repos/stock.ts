@@ -7,6 +7,7 @@ export async function recordStockMovement(input: {
   variantId: string;
   type: StockMovementType;
   qty: number;
+  unitCost?: number;
   note?: string | null;
 }): Promise<void> {
   const db = getDb();
@@ -16,6 +17,7 @@ export async function recordStockMovement(input: {
     occurredAt: Date.now(),
     type: input.type,
     qty: Math.round(input.qty),
+    ...(input.unitCost !== undefined ? { unitCost: input.unitCost } : {}),
     refTransactionId: null,
     note: input.note ?? null,
   };

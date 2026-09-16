@@ -28,20 +28,25 @@ After code changes, run `npm run restart` so the phone gets the update.
 - `src/lib/db.ts` — Dexie schema (version 2) for all tables. `getDb()` is lazy so
   nothing touches IndexedDB during SSR/prerender. `resetDbInstance()` exists for tests.
 - `src/lib/repos/*` — data access (`products`, `customers`, `transactions`, `stock`,
-  `stock-days`, `discounts`, `returns`). Transaction creation is atomic: it resolves
-  tier prices, picks the best discount, writes snapshots, bonus items and stock
-  movements, and returns margin info.
+  `stock-days`, `discounts`, `returns`, `expenses`, `cash`). Transaction creation is
+  atomic: it resolves tier prices, picks the best discount, writes snapshots, bonus
+  items and stock movements, and returns margin info.
 - `src/lib/discounts.ts` — pure discount engine: 4 effect types (percent, amount,
   special price, bonus product), no stacking (best value for buyer wins), priority
   tie-break, condition types (min bottles/amount, multiples). `src/lib/reseller.ts` —
   flat tier pricing, MOQ, locked level, margin warning. Both heavily tested.
+- `src/lib/finance.ts` — pure reporting engine: `resolvePeriod` (WIB ranges),
+  `summarize` (full P&L), `byProduct`, `byBuyerType`, `dailySeries` for charts.
+  `src/lib/csv.ts` — CSV escaping + `downloadCsv` for report exports.
 - `src/lib/pricing.ts` — pure math: rounding (default Rp 500), margins, change,
   payment status. `src/lib/search.ts` — phone/name normalization + basic ranking.
   `src/lib/backup.ts` — JSON export/import of every table. `src/lib/pin.ts` — PIN hash
   (Web Crypto). `src/lib/seed.ts` — first-run starter data (default PIN `1234`).
-- `src/app/(app)/*` — pages: `/` Beranda, `/beli` POS, `/pelanggan`, `/piutang`,
-  `/stok`, `/setting`. `src/app/(app)/layout.tsx` is the client shell:
-  ToastProvider → PinGate → header + nav.
+- `src/app/(app)/*` — pages: `/` Beranda (financial report), `/beli` POS, `/pelanggan`,
+  `/piutang`, `/stok`, `/pengeluaran`, `/kasir`, `/laporan`, `/setting`.
+  `src/app/(app)/layout.tsx` is the client shell: ToastProvider → PinGate → header + nav.
+  Shared UI: `components/period-picker.tsx`, `components/line-chart.tsx` (inline SVG,
+  no chart dependency).
 - Styling: all colors/fonts/radii/shadows live in `src/app/globals.css` (`@theme`
   tokens: `bg-canvas`, `text-ink`, `bg-soy`, `border-line`, …). Shared class
   primitives in `src/components/ui.ts`; inline SVG icons in `src/components/icons.tsx`.
@@ -62,10 +67,17 @@ After code changes, run `npm run restart` so the phone gets the update.
 - Stock day: entering the opening count adjusts the balance to the physical count;
   sales auto-decrement; additions/damage are logged; closing stores expected vs actual
   and writes a `correction` movement for the difference.
-- **No manual date inputs anywhere.** Transaction/expense dates are automatic.
+- **No manual date inputs anywhere** for transactions/expenses (dates are automatic).
+  The report period picker (including a specific date) is a report filter, not data entry.
+- P&L: Omzet (gross, bonus excluded) − Diskon = Penjualan Bersih; ± Pembulatan;
+  − HPP (includes bonus items) = Laba Kotor; − Biaya Operasional − Kerugian Rusak
+  = Laba Bersih; margin % = laba bersih ÷ penjualan bersih. Rounding is shown as its
+  own line so the report reconciles with cash (Σ finalTotal).
+- Damage movements snapshot `unitCost`; older/without it fall back to the current
+  variant cost. Expenses are stored with automatic date. Cash close assumes
+  cash/QRIS/transfer separation and treats received payments as cash.
 - Rounding: final total rounds to the nearest `roundingStep` (default 500), toggle in Setting.
 - Stock may go negative (selling when stock is 0 is allowed, with a warning badge).
-- Reports (CSV + print PDF) and expenses/cash-close come in Fase 3.
 - PIN is a local UI gate only — it is not server security.
 
 ## Safety rules
@@ -80,7 +92,7 @@ After code changes, run `npm run restart` so the phone gets the update.
 - **Fase 1 (done):** schema, products/variants/costs, POS Beli, basic customers, PIN, backup.
 - **Fase 2 (done):** stock days (opening/damage/addition/closing), discount engine +
   simulator + margin guard, reseller tiers/MOQ/receivables/returns, piutang page.
-- **Fase 3:** expenses, daily cash close, full financial Beranda + charts, reports
-  (CSV + print PDF).
+- **Fase 3 (done):** expenses, daily cash close, full financial Beranda (P&L, period
+  filter, SVG charts, top products, per buyer type), reports page with CSV + print PDF.
 - **Fase 4:** fuzzy search, service worker/offline install (needs HTTPS), cancel last
   transaction, attach member, audit log, WhatsApp receipt.

@@ -144,7 +144,7 @@ export default function SettingPage() {
       <section className={cardClass}>
         <h2 className={sectionLabelClass}>Tentang</h2>
         <p className="mt-1 text-xs text-ink-soft">
-          Dashboard Admin v0.3.0 (Fase 2). Semua data tersimpan lokal di HP
+          Dashboard Admin v0.4.0 (Fase 3). Semua data tersimpan lokal di HP
           (offline). PIN hanya mengunci tampilan aplikasi.
         </p>
       </section>

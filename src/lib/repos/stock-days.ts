@@ -155,10 +155,12 @@ export async function recordDamage(
   note?: string | null,
 ): Promise<void> {
   const amount = Math.max(1, Math.round(qty));
+  const variant = await getDb().productVariants.get(variantId);
   await recordStockMovement({
     variantId,
     type: "damage",
     qty: -amount,
+    unitCost: variant?.costPrice ?? 0,
     note: note ?? "Produk rusak / tidak laku",
   });
 }

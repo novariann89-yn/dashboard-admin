@@ -165,6 +165,7 @@ export interface StockMovement {
   occurredAt: number;
   type: StockMovementType;
   qty: number;
+  unitCost?: number;
   refTransactionId: ID | null;
   note: string | null;
 }

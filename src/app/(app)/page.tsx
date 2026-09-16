@@ -2,52 +2,81 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import Link from "next/link";
-import { IconDownload } from "@/components/icons";
+import { useState } from "react";
+import { IconDownload, IconPlus } from "@/components/icons";
+import { FinanceChart } from "@/components/line-chart";
+import { PeriodPicker, type PeriodValue } from "@/components/period-picker";
 import { useToast } from "@/components/toast";
 import {
+  badgeClass,
   cardClass,
   linkClass,
   sectionLabelClass,
+  statusVoidClass,
   strongCardClass,
 } from "@/components/ui";
 import { downloadBackup } from "@/lib/backup";
 import { getDb } from "@/lib/db";
+import {
+  byBuyerType,
+  byProduct,
+  dailySeries,
+  resolvePeriod,
+  summarize,
+} from "@/lib/finance";
 import { formatTime, isTodayWib, rupiah } from "@/lib/format";
 import { listVariantsWithProduct } from "@/lib/repos/products";
+import { stockLevel } from "@/lib/repos/stock";
 import { listReceivables } from "@/lib/repos/transactions";
 import { getSettings } from "@/lib/settings";
 
 export default function BerandaPage() {
   const toast = useToast();
+
   const transactions = useLiveQuery(() => getDb().transactions.toArray(), [], []);
   const items = useLiveQuery(() => getDb().transactionItems.toArray(), [], []);
+  const movements = useLiveQuery(() => getDb().stockMovements.toArray(), [], []);
+  const expenses = useLiveQuery(() => getDb().expenses.toArray(), [], []);
   const variants = useLiveQuery(() => listVariantsWithProduct(false), [], []);
   const settings = useLiveQuery(() => getSettings(), [], null);
   const receivables = useLiveQuery(() => listReceivables(), [], []);
 
-  const activeToday = transactions.filter(
-    (transaction) => !transaction.cancelled && isTodayWib(transaction.occurredAt),
-  );
-  const todayIds = new Set(activeToday.map((transaction) => transaction.id));
-  const todayItems = items.filter((item) => todayIds.has(item.transactionId));
+  const [periodValue, setPeriodValue] = useState<PeriodValue>({
+    preset: "today",
+  });
+  const [chartDays, setChartDays] = useState(7);
 
-  const revenue = activeToday.reduce(
-    (sum, transaction) => sum + transaction.finalTotal,
-    0,
+  const variantCosts = Object.fromEntries(
+    variants.map((variant) => [variant.id, variant.costPrice]),
   );
-  const bottles = todayItems.reduce((sum, item) => sum + item.qty, 0);
+  const input = { transactions, items, movements, expenses, variantCosts };
+  const period = resolvePeriod(periodValue.preset, periodValue.day);
 
+  const summary = summarize({ ...input, period });
+  const products = byProduct({ ...input, period });
+  const buyers = byBuyerType({ ...input, period });
+  const chart = dailySeries(input, chartDays);
+
+  const lowStock = variants.filter(
+    (variant) => variant.active && stockLevel(variant.stock) !== "high",
+  );
   const missingCost = variants.filter(
     (variant) => variant.active && variant.costPrice <= 0,
   );
 
   const needsBackup =
-    settings !== null &&
-    Date.now() - settings.lastBackupAt > 24 * 60 * 60 * 1000;
+    settings !== null && Date.now() - settings.lastBackupAt > 24 * 60 * 60 * 1000;
 
   const recent = [...transactions]
     .sort((a, b) => b.occurredAt - a.occurredAt)
     .slice(0, 5);
+
+  const todayBottles = items
+    .filter((item) => {
+      const transaction = transactions.find((t) => t.id === item.transactionId);
+      return transaction && !transaction.cancelled && isTodayWib(transaction.occurredAt);
+    })
+    .reduce((sum, item) => sum + item.qty, 0);
 
   async function handleBackup() {
     await downloadBackup();
@@ -60,42 +89,200 @@ export default function BerandaPage() {
         href="/beli"
         className="flex items-center justify-center gap-2 rounded-card border-2 border-ink bg-soy px-4 py-4 text-base font-extrabold shadow-hard transition active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
       >
+        <IconPlus className="h-5 w-5" />
         Catat Pembelian
       </Link>
 
+      <div className="grid grid-cols-4 gap-1.5">
+        <Link
+          href="/pengeluaran"
+          className="rounded-control border-2 border-line bg-surface py-2 text-center text-[11px] font-bold text-ink-soft"
+        >
+          Pengeluaran
+        </Link>
+        <Link
+          href="/kasir"
+          className="rounded-control border-2 border-line bg-surface py-2 text-center text-[11px] font-bold text-ink-soft"
+        >
+          Kasir
+        </Link>
+        <Link
+          href="/laporan"
+          className="rounded-control border-2 border-line bg-surface py-2 text-center text-[11px] font-bold text-ink-soft"
+        >
+          Laporan
+        </Link>
+        <Link
+          href="/stok"
+          className="rounded-control border-2 border-line bg-surface py-2 text-center text-[11px] font-bold text-ink-soft"
+        >
+          Stok
+        </Link>
+      </div>
+
+      <PeriodPicker value={periodValue} onChange={setPeriodValue} />
+
       <div className="grid grid-cols-2 gap-3">
         <div className={strongCardClass}>
-          <p className={sectionLabelClass}>Omzet hari ini</p>
+          <p className={sectionLabelClass}>Omzet</p>
           <p className="mt-1 text-2xl font-extrabold tabular-nums">
-            {rupiah(revenue)}
+            {rupiah(summary.grossSales)}
           </p>
+          <p className="text-[10px] text-ink-soft">{period.label}</p>
         </div>
         <div className={strongCardClass}>
-          <p className={sectionLabelClass}>Transaksi</p>
-          <p className="mt-1 text-2xl font-extrabold tabular-nums">
-            {activeToday.length}
+          <p className={sectionLabelClass}>Laba kotor</p>
+          <p className="mt-1 text-2xl font-extrabold tabular-nums text-pandan">
+            {rupiah(summary.grossProfit)}
+          </p>
+          <p className="text-[10px] text-ink-soft">{period.label}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className={cardClass}>
+          <p className="text-xs font-semibold text-ink-soft">Botol terjual</p>
+          <p className="mt-1 text-xl font-extrabold tabular-nums">
+            {summary.bottlesSold}
+            {summary.bottlesBonus > 0 && (
+              <span className="ml-1 text-xs font-bold text-soy-dark">
+                +{summary.bottlesBonus} bonus
+              </span>
+            )}
+          </p>
+          <p className="text-[10px] tabular-nums text-ink-soft">
+            Hari ini: {todayBottles}
+          </p>
+        </div>
+        <div className={cardClass}>
+          <p className="text-xs font-semibold text-ink-soft">Transaksi</p>
+          <p className="mt-1 text-xl font-extrabold tabular-nums">
+            {summary.transactionCount}
           </p>
         </div>
       </div>
 
-      <div className={strongCardClass}>
-        <p className={sectionLabelClass}>Botol keluar hari ini</p>
-        <p className="mt-1 text-2xl font-extrabold tabular-nums">{bottles}</p>
-      </div>
+      <section className={cardClass}>
+        <h2 className={sectionLabelClass}>Rincian keuangan · {period.label}</h2>
+        <dl className="mt-3 flex flex-col gap-1.5 text-sm">
+          <Row label="Omzet (kotor)" value={summary.grossSales} />
+          <Row label="Diskon" value={-summary.discount} />
+          <Row label="Penjualan bersih" value={summary.netSales} strong />
+          {summary.rounding !== 0 && (
+            <Row label="Pembulatan" value={summary.rounding} />
+          )}
+          <Row label="HPP / modal terjual" value={-summary.hpp} />
+          <div className="my-1 border-t-2 border-dashed border-ink/25" />
+          <Row label="Laba kotor" value={summary.grossProfit} strong />
+          <Row label="Biaya operasional" value={-summary.expenses} />
+          <Row label="Kerugian produk rusak" value={-summary.damageLoss} />
+          <div className="my-1 border-t-2 border-ink" />
+          <Row label="Laba bersih" value={summary.netProfit} strong />
+        </dl>
+        <p className="mt-2 text-right text-xs font-bold text-ink-soft">
+          Margin:{" "}
+          {summary.marginPercent === null
+            ? "-"
+            : `${summary.marginPercent.toFixed(1)}%`}
+        </p>
+        <Link
+          href="/laporan"
+          className={`${linkClass} mt-2 inline-block text-xs`}
+        >
+          Laporan & unduh CSV
+        </Link>
+      </section>
 
-      {needsBackup && (
+      <section className={cardClass}>
+        <div className="flex items-center justify-between">
+          <h2 className={sectionLabelClass}>Grafik omzet & laba</h2>
+          <div className="flex gap-1">
+            {[7, 30].map((days) => (
+              <button
+                key={days}
+                type="button"
+                onClick={() => setChartDays(days)}
+                className={`rounded-control border-2 px-2 py-0.5 text-[11px] font-bold ${
+                  chartDays === days
+                    ? "border-ink bg-soy"
+                    : "border-line bg-surface text-ink-soft"
+                }`}
+              >
+                {days}h
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-2">
+          <FinanceChart data={chart} />
+        </div>
+      </section>
+
+      <details className={cardClass}>
+        <summary className="cursor-pointer text-sm font-extrabold">
+          Produk paling untung
+        </summary>
+        {products.length === 0 ? (
+          <p className="mt-2 text-sm text-ink-soft">Belum ada penjualan.</p>
+        ) : (
+          <ul className="mt-2 flex flex-col divide-y divide-line">
+            {products.slice(0, 8).map((row) => (
+              <li key={row.variantId} className="flex items-center justify-between py-2">
+                <span className="text-xs">
+                  <span className="font-bold">{row.label}</span>
+                  <span className="block text-[11px] tabular-nums text-ink-soft">
+                    {row.qtySold} terjual
+                    {row.qtyBonus > 0 ? ` · ${row.qtyBonus} bonus` : ""}
+                  </span>
+                </span>
+                <span className="text-right text-xs">
+                  <span className="block font-bold tabular-nums text-pandan">
+                    {rupiah(row.profit)}
+                  </span>
+                  <span className="text-[10px] tabular-nums text-ink-soft">
+                    {rupiah(row.revenue)} ·{" "}
+                    {row.marginPercent === null
+                      ? "-"
+                      : `${row.marginPercent.toFixed(0)}%`}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
+
+      <details className={cardClass}>
+        <summary className="cursor-pointer text-sm font-extrabold">
+          Rincian per tipe pembeli
+        </summary>
+        <ul className="mt-2 flex flex-col divide-y divide-line">
+          {buyers.map((row) => (
+            <li key={row.buyerType} className="flex items-center justify-between py-2">
+              <span className="text-xs font-bold">{row.label}</span>
+              <span className="text-right text-xs">
+                <span className="block font-bold tabular-nums">
+                  {rupiah(row.revenue)}
+                </span>
+                <span className="text-[10px] tabular-nums text-ink-soft">
+                  laba {rupiah(row.profit)} · {row.transactions}x
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </details>
+
+      {lowStock.length > 0 && (
         <section className="rounded-card border-2 border-soy-dark/50 bg-cream p-4">
-          <p className="text-sm font-bold">Belum backup hari ini</p>
-          <p className="mt-1 text-xs text-ink-soft">
-            Data hanya tersimpan di HP ini. Unduh backup supaya aman.
-          </p>
-          <button
-            onClick={handleBackup}
-            className="mt-3 inline-flex items-center gap-2 rounded-control border-2 border-ink bg-soy px-3 py-2 text-xs font-bold shadow-hard-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
-          >
-            <IconDownload className="h-4 w-4" />
-            Backup sekarang
-          </button>
+          <p className="text-sm font-bold text-soy-dark">Stok menipis</p>
+          <ul className="mt-1 flex flex-col gap-0.5 text-xs text-soy-dark">
+            {lowStock.map((variant) => (
+              <li key={variant.id} className="tabular-nums">
+                {variant.productName} {variant.sizeName}: {variant.stock}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
@@ -104,13 +291,9 @@ export default function BerandaPage() {
           href="/piutang"
           className="flex items-center justify-between rounded-card border-2 border-brick/40 bg-brick/10 p-4"
         >
-          <span className="text-sm font-bold text-brick">
-            Piutang belum dibayar
-          </span>
+          <span className="text-sm font-bold text-brick">Piutang belum dibayar</span>
           <span className="text-sm font-extrabold tabular-nums text-brick">
-            {rupiah(
-              receivables.reduce((sum, item) => sum + item.remaining, 0),
-            )}
+            {rupiah(receivables.reduce((sum, item) => sum + item.remaining, 0))}
           </span>
         </Link>
       )}
@@ -131,6 +314,22 @@ export default function BerandaPage() {
           >
             Isi di Setting
           </Link>
+        </section>
+      )}
+
+      {needsBackup && (
+        <section className="rounded-card border-2 border-soy-dark/50 bg-cream p-4">
+          <p className="text-sm font-bold">Belum backup hari ini</p>
+          <p className="mt-1 text-xs text-ink-soft">
+            Data hanya tersimpan di HP ini. Unduh backup supaya aman.
+          </p>
+          <button
+            onClick={handleBackup}
+            className="mt-3 inline-flex items-center gap-2 rounded-control border-2 border-ink bg-soy px-3 py-2 text-xs font-bold shadow-hard-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+          >
+            <IconDownload className="h-4 w-4" />
+            Backup sekarang
+          </button>
         </section>
       )}
 
@@ -163,16 +362,12 @@ export default function BerandaPage() {
                     {rupiah(transaction.finalTotal)}
                   </span>
                   {transaction.cancelled && (
-                    <span className="text-[10px] font-bold text-brick">
-                      dibatalkan
-                    </span>
+                    <span className={statusVoidClass}>dibatalkan</span>
                   )}
                   {!transaction.cancelled &&
                     transaction.paymentStatus !== "paid" && (
-                      <span className="text-[10px] font-bold text-brick">
-                        {transaction.paymentStatus === "partial"
-                          ? "DP"
-                          : "tempo"}
+                      <span className={`${badgeClass} mt-0.5`}>
+                        {transaction.paymentStatus === "partial" ? "DP" : "tempo"}
                       </span>
                     )}
                 </span>
@@ -180,13 +375,26 @@ export default function BerandaPage() {
             ))}
           </ul>
         )}
-        <Link
-          href="/pelanggan"
-          className={`${linkClass} mt-3 inline-block text-xs`}
-        >
-          Lihat pelanggan
-        </Link>
       </section>
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: number;
+  strong?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <dt className={strong ? "font-bold" : "text-ink-soft"}>{label}</dt>
+      <dd className={`tabular-nums ${strong ? "font-extrabold" : ""}`}>
+        {value < 0 ? `−${rupiah(Math.abs(value))}` : rupiah(value)}
+      </dd>
     </div>
   );
 }
