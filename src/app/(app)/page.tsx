@@ -25,9 +25,15 @@ import {
   summarize,
 } from "@/lib/finance";
 import { formatTime, isTodayWib, rupiah } from "@/lib/format";
+import { listCustomers } from "@/lib/repos/customers";
 import { listVariantsWithProduct } from "@/lib/repos/products";
 import { stockLevel } from "@/lib/repos/stock";
-import { listReceivables } from "@/lib/repos/transactions";
+import {
+  cancelLastTransaction,
+  getTransactionItems,
+  listReceivables,
+} from "@/lib/repos/transactions";
+import { buildReceiptText, whatsappUrl } from "@/lib/receipt";
 import { getSettings } from "@/lib/settings";
 
 export default function BerandaPage() {
@@ -40,6 +46,7 @@ export default function BerandaPage() {
   const variants = useLiveQuery(() => listVariantsWithProduct(false), [], []);
   const settings = useLiveQuery(() => getSettings(), [], null);
   const receivables = useLiveQuery(() => listReceivables(), [], []);
+  const customers = useLiveQuery(() => listCustomers(), [], []);
 
   const [periodValue, setPeriodValue] = useState<PeriodValue>({
     preset: "today",
@@ -71,6 +78,14 @@ export default function BerandaPage() {
     .sort((a, b) => b.occurredAt - a.occurredAt)
     .slice(0, 5);
 
+  const latestActive =
+    [...transactions]
+      .filter((transaction) => !transaction.cancelled)
+      .sort((a, b) => b.occurredAt - a.occurredAt)[0] ?? null;
+  const canCancelLatest = latestActive
+    ? Date.now() - latestActive.occurredAt <= 15 * 60 * 1000
+    : false;
+
   const todayBottles = items
     .filter((item) => {
       const transaction = transactions.find((t) => t.id === item.transactionId);
@@ -81,6 +96,37 @@ export default function BerandaPage() {
   async function handleBackup() {
     await downloadBackup();
     toast("Backup diunduh");
+  }
+
+  async function handleCancelLatest() {
+    const reason = window.prompt("Alasan pembatalan?");
+    if (!reason || !reason.trim()) return;
+    if (!window.confirm("Batalkan transaksi terakhir? Stok akan dikembalikan.")) {
+      return;
+    }
+    const result = await cancelLastTransaction(reason);
+    if (!result.ok) {
+      toast(result.error ?? "Gagal membatalkan", "error");
+      return;
+    }
+    toast("Transaksi dibatalkan, stok dikembalikan");
+  }
+
+  async function handleWhatsapp(transactionId: string) {
+    const transaction = transactions.find((item) => item.id === transactionId);
+    if (!transaction) return;
+    let phone = transaction.customerId
+      ? (customers.find((item) => item.id === transaction.customerId)?.phone ?? "")
+      : "";
+    if (!phone) {
+      phone = window.prompt("Nomor HP tujuan (08xxx)") ?? "";
+      if (!phone.trim()) return;
+    }
+    const items = await getTransactionItems(transaction.id);
+    window.open(
+      whatsappUrl(phone, buildReceiptText(transaction, items)),
+      "_blank",
+    );
   }
 
   return (
@@ -362,7 +408,12 @@ export default function BerandaPage() {
                     {rupiah(transaction.finalTotal)}
                   </span>
                   {transaction.cancelled && (
-                    <span className={statusVoidClass}>dibatalkan</span>
+                    <span className={statusVoidClass}>
+                      dibatalkan
+                      {transaction.cancelReason
+                        ? `: ${transaction.cancelReason}`
+                        : ""}
+                    </span>
                   )}
                   {!transaction.cancelled &&
                     transaction.paymentStatus !== "paid" && (
@@ -370,6 +421,24 @@ export default function BerandaPage() {
                         {transaction.paymentStatus === "partial" ? "DP" : "tempo"}
                       </span>
                     )}
+                  <span className="mt-1 flex justify-end gap-2">
+                    {transaction.id === latestActive?.id && canCancelLatest && (
+                      <button
+                        type="button"
+                        onClick={handleCancelLatest}
+                        className="text-[10px] font-bold text-brick underline"
+                      >
+                        Batalkan
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleWhatsapp(transaction.id)}
+                      className="text-[10px] font-bold text-pandan underline"
+                    >
+                      WA
+                    </button>
+                  </span>
                 </span>
               </li>
             ))}

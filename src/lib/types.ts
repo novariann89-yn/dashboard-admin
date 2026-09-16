@@ -11,7 +11,8 @@ export type StockMovementType =
   | "damage"
   | "return"
   | "addition"
-  | "correction";
+  | "correction"
+  | "cancel";
 
 export interface Product {
   id: ID;

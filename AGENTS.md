@@ -38,10 +38,17 @@ After code changes, run `npm run restart` so the phone gets the update.
 - `src/lib/finance.ts` — pure reporting engine: `resolvePeriod` (WIB ranges),
   `summarize` (full P&L), `byProduct`, `byBuyerType`, `dailySeries` for charts.
   `src/lib/csv.ts` — CSV escaping + `downloadCsv` for report exports.
+  `src/lib/receipt.ts` — WhatsApp receipt text + `wa.me` URL builder.
 - `src/lib/pricing.ts` — pure math: rounding (default Rp 500), margins, change,
-  payment status. `src/lib/search.ts` — phone/name normalization + basic ranking.
-  `src/lib/backup.ts` — JSON export/import of every table. `src/lib/pin.ts` — PIN hash
-  (Web Crypto). `src/lib/seed.ts` — first-run starter data (default PIN `1234`).
+  payment status. `src/lib/search.ts` — phone/name normalization + ranking with
+  fuzzy matching (Levenshtein ≤2, trigram ≥0.4). `src/lib/backup.ts` — JSON
+  export/import. `src/lib/pin.ts` — PIN hash (Web Crypto). `src/lib/seed.ts` —
+  first-run starter data (default PIN `1234`).
+- Offline/PWA: `public/sw.js` (app-shell cache, network-first navigation) registered
+  by `src/components/pwa-register.tsx` **only in secure contexts** (HTTPS/localhost),
+  so LAN HTTP keeps working.
+- `src/lib/repos/audit.ts` — audit log for cancels, price changes, manual stock and
+  expenses. `src/lib/use-debounced.ts` — 150 ms search debounce hook.
 - `src/app/(app)/*` — pages: `/` Beranda (financial report), `/beli` POS, `/pelanggan`,
   `/piutang`, `/stok`, `/pengeluaran`, `/kasir`, `/laporan`, `/setting`.
   `src/app/(app)/layout.tsx` is the client shell: ToastProvider → PinGate → header + nav.
@@ -78,6 +85,15 @@ After code changes, run `npm run restart` so the phone gets the update.
   cash/QRIS/transfer separation and treats received payments as cash.
 - Rounding: final total rounds to the nearest `roundingStep` (default 500), toggle in Setting.
 - Stock may go negative (selling when stock is 0 is allowed, with a warning badge).
+- Cancel last transaction: only the latest, within 15 minutes, reason required; it marks
+  the transaction cancelled, restores stock via `cancel` movements and writes an audit
+  entry. Stock-day summaries ignore movements tied to cancelled transactions.
+- Attach customer to the last transaction: only within 3 minutes and only if it has no
+  customer; it records the buyer without changing prices/totals (audited).
+- Audit log covers: cancel, attach, price/cost changes, manual stock, expenses, payments.
+- WhatsApp receipt is a `wa.me` deep link built from the transaction snapshot.
+- Service worker requires a secure context; over LAN HTTP the app still works but is
+  not installable offline (see DEPLOY.md for HTTPS options).
 - PIN is a local UI gate only — it is not server security.
 
 ## Safety rules
@@ -94,5 +110,7 @@ After code changes, run `npm run restart` so the phone gets the update.
   simulator + margin guard, reseller tiers/MOQ/receivables/returns, piutang page.
 - **Fase 3 (done):** expenses, daily cash close, full financial Beranda (P&L, period
   filter, SVG charts, top products, per buyer type), reports page with CSV + print PDF.
-- **Fase 4:** fuzzy search, service worker/offline install (needs HTTPS), cancel last
-  transaction, attach member, audit log, WhatsApp receipt.
+- **Fase 4 (done):** fuzzy search, PWA service worker (needs HTTPS to install), cancel
+  last transaction, attach member, audit log, WhatsApp receipt.
+- All phases from the revision doc are implemented. Remaining known gap: full offline
+  install only works over HTTPS.

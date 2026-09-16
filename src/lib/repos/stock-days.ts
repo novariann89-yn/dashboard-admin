@@ -2,6 +2,7 @@ import { getDb } from "../db";
 import { wibDateString } from "../format";
 import { newId } from "../id";
 import type { StockClosing, StockClosingItem, StockMovementType } from "../types";
+import { logAudit } from "./audit";
 import { listVariantsWithProduct } from "./products";
 import { recordStockMovement } from "./stock";
 
@@ -30,18 +31,25 @@ export async function getDaySummary(
 ): Promise<DaySummary> {
   const db = getDb();
   const variants = await listVariantsWithProduct(true);
-  const [openings, closing, movements] = await Promise.all([
+  const [openings, closing, movements, transactions] = await Promise.all([
     db.stockOpenings.where("date").equals(date).toArray(),
     db.stockClosings.where("date").equals(date).first(),
     db.stockMovements.toArray(),
+    db.transactions.toArray(),
   ]);
 
   const closingItems = closing
     ? await db.stockClosingItems.where("closingId").equals(closing.id).toArray()
     : [];
 
+  const cancelledIds = new Set(
+    transactions.filter((transaction) => transaction.cancelled).map((transaction) => transaction.id),
+  );
+
   const todayMovements = movements.filter(
-    (movement) => wibDateString(movement.occurredAt) === date,
+    (movement) =>
+      wibDateString(movement.occurredAt) === date &&
+      !(movement.refTransactionId && cancelledIds.has(movement.refTransactionId)),
   );
 
   const rows: DayRow[] = variants.map((variant) => {
@@ -133,6 +141,13 @@ export async function saveOpening(
       }
     },
   );
+
+  await logAudit({
+    action: "stock_opening",
+    table: "stockOpenings",
+    recordId: variantId,
+    newData: { date, counted },
+  });
 }
 
 export async function recordAddition(
@@ -146,6 +161,12 @@ export async function recordAddition(
     type: "addition",
     qty: amount,
     note: note ?? "Tambahan stok",
+  });
+  await logAudit({
+    action: "stock_addition",
+    table: "stockMovements",
+    recordId: variantId,
+    newData: { qty: amount, note: note ?? null },
   });
 }
 
@@ -162,6 +183,12 @@ export async function recordDamage(
     qty: -amount,
     unitCost: variant?.costPrice ?? 0,
     note: note ?? "Produk rusak / tidak laku",
+  });
+  await logAudit({
+    action: "stock_damage",
+    table: "stockMovements",
+    recordId: variantId,
+    newData: { qty: amount, unitCost: variant?.costPrice ?? 0, note: note ?? null },
   });
 }
 

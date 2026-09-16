@@ -1,6 +1,7 @@
 import { getDb } from "../db";
 import { newId } from "../id";
 import type { PriceHistory, Product, ProductVariant } from "../types";
+import { logAudit } from "./audit";
 
 export async function listProducts(): Promise<Product[]> {
   const products = await getDb().products.toArray();
@@ -128,6 +129,24 @@ export async function updateVariant(
       await db.priceHistory.add(history);
     }
   });
+
+  if (priceChanged) {
+    await logAudit({
+      action: "price_change",
+      table: "productVariants",
+      recordId: id,
+      oldData: {
+        sellPrice: current.sellPrice,
+        resellerPrice: current.resellerPrice,
+        costPrice: current.costPrice,
+      },
+      newData: {
+        sellPrice: next.sellPrice ?? current.sellPrice,
+        resellerPrice: next.resellerPrice ?? current.resellerPrice,
+        costPrice: next.costPrice ?? current.costPrice,
+      },
+    });
+  }
 }
 
 export async function listPriceHistory(variantId: string): Promise<PriceHistory[]> {

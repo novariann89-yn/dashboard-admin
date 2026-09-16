@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
+import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -31,7 +32,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id" className={jakarta.variable}>
-      <body className="bg-canvas font-sans text-ink antialiased">{children}</body>
+      <body className="bg-canvas font-sans text-ink antialiased">
+        <PwaRegister />
+        {children}
+      </body>
     </html>
   );
 }

@@ -13,10 +13,12 @@ import {
   secondaryButtonClass,
   statusActiveClass,
 } from "@/components/ui";
+import { listAudit } from "@/lib/repos/audit";
 import { downloadBackup, importBackup } from "@/lib/backup";
 import { DiscountRulesSection } from "@/components/discount-rules";
 import { ResellerSection } from "@/components/reseller-levels";
 import { marginPercent } from "@/lib/pricing";
+import { formatDateTime } from "@/lib/format";
 import { hashPin, isValidPin, randomSalt, verifyPin } from "@/lib/pin";
 import {
   createProduct,
@@ -78,6 +80,8 @@ export default function SettingPage() {
       <ResellerSection />
 
       <DiscountRulesSection />
+
+      <AuditSection />
 
       <PinSection />
 
@@ -144,11 +148,52 @@ export default function SettingPage() {
       <section className={cardClass}>
         <h2 className={sectionLabelClass}>Tentang</h2>
         <p className="mt-1 text-xs text-ink-soft">
-          Dashboard Admin v0.4.0 (Fase 3). Semua data tersimpan lokal di HP
-          (offline). PIN hanya mengunci tampilan aplikasi.
+          Dashboard Admin v0.5.0 (Fase 4). Semua data tersimpan lokal di HP
+          (offline). PIN hanya mengunci tampilan aplikasi. Instal offline penuh
+          perlu HTTPS (lihat DEPLOY.md).
         </p>
       </section>
     </div>
+  );
+}
+
+const AUDIT_LABELS: Record<string, string> = {
+  cancel_transaction: "Batalkan transaksi",
+  attach_customer: "Tempel member",
+  price_change: "Ubah harga / modal",
+  stock_opening: "Stok awal",
+  stock_addition: "Tambah stok",
+  stock_damage: "Catat produk rusak",
+  create_expense: "Pengeluaran baru",
+  delete_expense: "Hapus pengeluaran",
+  record_payment: "Terima pembayaran",
+};
+
+function AuditSection() {
+  const entries = useLiveQuery(() => listAudit(30), [], []);
+
+  return (
+    <details className={cardClass}>
+      <summary className="cursor-pointer text-sm font-extrabold">
+        Riwayat aktivitas ({entries.length})
+      </summary>
+      {entries.length === 0 ? (
+        <p className="mt-2 text-sm text-ink-soft">Belum ada aktivitas tercatat.</p>
+      ) : (
+        <ul className="mt-2 flex flex-col divide-y divide-line">
+          {entries.map((entry) => (
+            <li key={entry.id} className="py-2 text-xs">
+              <span className="font-bold">
+                {AUDIT_LABELS[entry.action] ?? entry.action}
+              </span>
+              <span className="block tabular-nums text-ink-soft">
+                {formatDateTime(entry.at)} · {entry.table}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </details>
   );
 }
 

@@ -1,6 +1,7 @@
 import { getDb } from "../db";
 import { newId } from "../id";
 import type { Expense } from "../types";
+import { logAudit } from "./audit";
 
 export const EXPENSE_CATEGORIES = [
   "Bahan Baku",
@@ -36,9 +37,24 @@ export async function createExpense(input: {
   };
 
   await getDb().expenses.add(expense);
+  await logAudit({
+    action: "create_expense",
+    table: "expenses",
+    recordId: expense.id,
+    newData: { category: expense.category, amount: expense.amount },
+  });
   return expense;
 }
 
 export async function deleteExpense(id: string): Promise<void> {
+  const existing = await getDb().expenses.get(id);
   await getDb().expenses.delete(id);
+  await logAudit({
+    action: "delete_expense",
+    table: "expenses",
+    recordId: id,
+    oldData: existing
+      ? { category: existing.category, amount: existing.amount }
+      : null,
+  });
 }

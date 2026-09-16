@@ -5,6 +5,7 @@ import { newId } from "../id";
 import { computeTotals, paymentStatusFor } from "../pricing";
 import { resolveResellerPrice, type ResellerLevelInput } from "../reseller";
 import { getSettings } from "../settings";
+import { logAudit } from "./audit";
 import type {
   BuyerType,
   PaymentMethod,
@@ -12,6 +13,9 @@ import type {
   Transaction,
   TransactionItem,
 } from "../types";
+
+const CANCEL_WINDOW_MS = 15 * 60 * 1000;
+const ATTACH_WINDOW_MS = 3 * 60 * 1000;
 
 export interface CreateTransactionInput {
   buyerType: BuyerType;
@@ -367,8 +371,132 @@ export async function recordPayment(
     });
     await db.transactions.update(transactionId, { paidAmount, paymentStatus });
   });
+
+  await logAudit({
+    action: "record_payment",
+    table: "transactions",
+    recordId: transactionId,
+    oldData: { paidAmount: transaction.paidAmount, paymentStatus: transaction.paymentStatus },
+    newData: { paidAmount, paymentStatus, amount: value },
+  });
 }
 
 export async function listPayments(transactionId: string) {
   return getDb().payments.where("transactionId").equals(transactionId).toArray();
+}
+
+export async function getLatestTransaction(): Promise<Transaction | undefined> {
+  const rows = await getDb()
+    .transactions.orderBy("occurredAt")
+    .reverse()
+    .limit(1)
+    .toArray();
+  return rows[0];
+}
+
+export interface ActionResult {
+  ok: boolean;
+  error?: string;
+}
+
+export async function cancelLastTransaction(reason: string): Promise<ActionResult> {
+  const db = getDb();
+  const trimmed = reason.trim();
+  if (!trimmed) return { ok: false, error: "Alasan wajib diisi" };
+
+  const latest = await getLatestTransaction();
+  if (!latest || latest.cancelled) {
+    return { ok: false, error: "Tidak ada transaksi untuk dibatalkan" };
+  }
+  if (Date.now() - latest.occurredAt > CANCEL_WINDOW_MS) {
+    return { ok: false, error: "Sudah lewat 15 menit, tidak bisa dibatalkan" };
+  }
+
+  const items = await db.transactionItems
+    .where("transactionId")
+    .equals(latest.id)
+    .toArray();
+
+  const movements: StockMovement[] = items.map((item) => ({
+    id: newId(),
+    variantId: item.variantId,
+    occurredAt: Date.now(),
+    type: "cancel",
+    qty: item.qty,
+    refTransactionId: latest.id,
+    note: "Batal transaksi",
+  }));
+
+  await db.transaction(
+    "rw",
+    [db.transactions, db.stockMovements, db.productVariants],
+    async () => {
+      await db.transactions.update(latest.id, {
+        cancelled: true,
+        cancelReason: trimmed,
+        cancelledAt: Date.now(),
+      });
+
+      if (movements.length > 0) {
+        await db.stockMovements.bulkAdd(movements);
+      }
+
+      for (const item of items) {
+        const variant = await db.productVariants.get(item.variantId);
+        if (variant) {
+          await db.productVariants.update(item.variantId, {
+            stock: variant.stock + item.qty,
+          });
+        }
+      }
+    },
+  );
+
+  await logAudit({
+    action: "cancel_transaction",
+    table: "transactions",
+    recordId: latest.id,
+    oldData: { cancelled: false, finalTotal: latest.finalTotal },
+    newData: { cancelled: true, reason: trimmed },
+  });
+
+  return { ok: true };
+}
+
+export async function attachCustomer(
+  transactionId: string,
+  customerId: string,
+): Promise<ActionResult> {
+  const db = getDb();
+  const transaction = await db.transactions.get(transactionId);
+  if (!transaction || transaction.cancelled) {
+    return { ok: false, error: "Transaksi tidak ditemukan" };
+  }
+
+  const latest = await getLatestTransaction();
+  if (!latest || latest.id !== transactionId) {
+    return { ok: false, error: "Hanya transaksi terakhir yang bisa ditempeli" };
+  }
+  if (Date.now() - transaction.occurredAt > ATTACH_WINDOW_MS) {
+    return { ok: false, error: "Sudah lewat 3 menit" };
+  }
+
+  const customer = await db.customers.get(customerId);
+  if (!customer) return { ok: false, error: "Pelanggan tidak ditemukan" };
+
+  await db.transactions.update(transactionId, {
+    customerId,
+    customerName: customer.name,
+    buyerType: customer.type,
+  });
+
+  await logAudit({
+    action: "attach_customer",
+    table: "transactions",
+    recordId: transactionId,
+    oldData: { customerId: transaction.customerId, customerName: transaction.customerName },
+    newData: { customerId, customerName: customer.name, buyerType: customer.type },
+  });
+
+  return { ok: true };
 }

@@ -85,6 +85,73 @@ export function formatPhone(phone: string): string {
 
 export type RankedCustomer = { customer: Customer; score: number };
 
+export function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        current[j - 1] + 1,
+        previous[j] + 1,
+        previous[j - 1] + cost,
+      );
+    }
+    previous = current;
+  }
+
+  return previous[b.length];
+}
+
+export function trigramSimilarity(a: string, b: string): number {
+  if (a === b) return 1;
+  if (a.length < 3 || b.length < 3) return 0;
+
+  const grams = (value: string) => {
+    const set = new Set<string>();
+    for (let index = 0; index <= value.length - 3; index += 1) {
+      set.add(value.slice(index, index + 3));
+    }
+    return set;
+  };
+
+  const gramsA = grams(a);
+  const gramsB = grams(b);
+  let shared = 0;
+  for (const gram of gramsA) {
+    if (gramsB.has(gram)) shared += 1;
+  }
+  return (2 * shared) / (gramsA.size + gramsB.size);
+}
+
+export function fuzzyScore(query: string, name: string): number {
+  if (query.length < 3 || name.length === 0) return 0;
+
+  let best = 0;
+
+  for (const word of name.split(" ")) {
+    const distance = levenshtein(query, word);
+    if (distance <= 2) best = Math.max(best, 69 - distance * 12);
+
+    const similarity = trigramSimilarity(query, word);
+    if (similarity >= 0.4) {
+      best = Math.max(best, Math.round(40 + similarity * 29));
+    }
+  }
+
+  const wholeSimilarity = trigramSimilarity(query, name);
+  if (wholeSimilarity >= 0.4) {
+    best = Math.max(best, Math.round(40 + wholeSimilarity * 29));
+  }
+
+  return Math.min(69, best);
+}
+
 function scoreName(query: string, customer: Customer): number {
   const name = customer.nameNormal;
   if (!name) return 0;
@@ -94,7 +161,8 @@ function scoreName(query: string, customer: Customer): number {
   if (name.startsWith(query)) return 90;
   if (words.some((word) => word.startsWith(query))) return 80;
   if (name.includes(query)) return 70;
-  return 0;
+
+  return fuzzyScore(query, name);
 }
 
 function scorePhone(query: string, customer: Customer): number {

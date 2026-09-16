@@ -23,6 +23,7 @@ import { listVariantsWithProduct } from "@/lib/repos/products";
 import { recordReturn } from "@/lib/repos/returns";
 import { recordPayment } from "@/lib/repos/transactions";
 import { formatPhone, searchCustomers } from "@/lib/search";
+import { useDebouncedValue } from "@/lib/use-debounced";
 import type { Customer, CustomerType, Transaction } from "@/lib/types";
 
 export default function PelangganPage() {
@@ -34,6 +35,7 @@ export default function PelangganPage() {
 
   const [tab, setTab] = useState<CustomerType>("member");
   const [query, setQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(query, 150);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
@@ -78,9 +80,11 @@ export default function PelangganPage() {
 
   const rows = useMemo(() => {
     const candidates = customers.filter((customer) => customer.type === tab);
-    if (!query.trim()) return candidates;
-    return searchCustomers(query, candidates, 50).map((entry) => entry.customer);
-  }, [customers, tab, query]);
+    if (!debouncedQuery.trim()) return candidates;
+    return searchCustomers(debouncedQuery, candidates, 50).map(
+      (entry) => entry.customer,
+    );
+  }, [customers, tab, debouncedQuery]);
 
   const selected = customers.find((customer) => customer.id === selectedId) ?? null;
 

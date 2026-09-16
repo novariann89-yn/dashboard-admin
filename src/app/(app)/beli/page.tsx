@@ -7,17 +7,22 @@ import { useToast } from "@/components/toast";
 import { cardClass, inputClass, sectionLabelClass } from "@/components/ui";
 import { computeDiscount } from "@/lib/discounts";
 import { changeDue, computeTotals } from "@/lib/pricing";
-import { rupiah } from "@/lib/format";
+import { formatDate, rupiah } from "@/lib/format";
 import { resolveResellerPrice } from "@/lib/reseller";
 import { createCustomer, getCustomer, listCustomers } from "@/lib/repos/customers";
 import { listResellerLevels, listDiscountRules } from "@/lib/repos/discounts";
 import { listVariantsWithProduct } from "@/lib/repos/products";
 import {
+  attachCustomer,
   createTransaction,
+  getTransaction,
+  getTransactionItems,
   listRecentTransactions,
 } from "@/lib/repos/transactions";
+import { buildReceiptText, whatsappUrl } from "@/lib/receipt";
 import { searchCustomers } from "@/lib/search";
 import { getSettings } from "@/lib/settings";
+import { useDebouncedValue } from "@/lib/use-debounced";
 import type { BuyerType, Customer, PaymentMethod } from "@/lib/types";
 
 const buyerOptions: { value: BuyerType; label: string }[] = [
@@ -57,6 +62,14 @@ export default function BeliPage() {
   const [keypadQty, setKeypadQty] = useState("");
   const [recentVersion, setRecentVersion] = useState(0);
   const [recentCustomers, setRecentCustomers] = useState<Customer[]>([]);
+  const [lastSaved, setLastSaved] = useState<{
+    id: string;
+    at: number;
+    customerName: string | null;
+    customerPhone: string | null;
+    hasCustomer: boolean;
+  } | null>(null);
+  const [attachQuery, setAttachQuery] = useState("");
 
   const pressTimer = useRef<number | null>(null);
   const longPressed = useRef(false);
@@ -193,13 +206,37 @@ export default function BeliPage() {
     totalBottles > 0 &&
     totalBottles < moq;
 
+  const debouncedQuery = useDebouncedValue(query, 150);
+  const debouncedAttach = useDebouncedValue(attachQuery, 150);
+
   const results = useMemo(() => {
-    if (buyerType === "umum" || !query.trim()) return [];
+    if (buyerType === "umum" || !debouncedQuery.trim()) return [];
     const candidates = customers.filter(
       (item) => item.type === buyerType && item.active,
     );
-    return searchCustomers(query, candidates, 5).map((entry) => entry.customer);
-  }, [query, customers, buyerType]);
+    return searchCustomers(debouncedQuery, candidates, 5).map(
+      (entry) => entry.customer,
+    );
+  }, [debouncedQuery, customers, buyerType]);
+
+  const attachResults = useMemo(() => {
+    if (!debouncedAttach.trim()) return [];
+    return searchCustomers(debouncedAttach, customers, 5).map(
+      (entry) => entry.customer,
+    );
+  }, [debouncedAttach, customers]);
+
+  const duplicateNames = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const customer of results) {
+      counts.set(customer.nameNormal, (counts.get(customer.nameNormal) ?? 0) + 1);
+    }
+    return new Set(
+      Array.from(counts.entries())
+        .filter(([, count]) => count > 1)
+        .map(([name]) => name),
+    );
+  }, [results]);
 
   function addToCart(variantId: string, delta: number) {
     setCart((current) => ({
@@ -299,6 +336,14 @@ export default function BeliPage() {
           : "";
       toast(`Tersimpan ${rupiah(result.transaction.finalTotal)}.${changeText}`);
 
+      setLastSaved({
+        id: result.transaction.id,
+        at: Date.now(),
+        customerName: customer?.name ?? null,
+        customerPhone: customer?.phone ?? null,
+        hasCustomer: Boolean(customer),
+      });
+      setAttachQuery("");
       setCart({});
       setCustomer(null);
       setQuery("");
@@ -312,6 +357,47 @@ export default function BeliPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleAttachLast(customerToAttach: Customer) {
+    if (!lastSaved) return;
+    const result = await attachCustomer(lastSaved.id, customerToAttach.id);
+    if (!result.ok) {
+      toast(result.error ?? "Gagal menempel member", "error");
+      return;
+    }
+    setLastSaved((current) =>
+      current
+        ? {
+            ...current,
+            customerName: customerToAttach.name,
+            customerPhone: customerToAttach.phone,
+            hasCustomer: true,
+          }
+        : current,
+    );
+    setAttachQuery("");
+    toast(`${customerToAttach.name} ditempel ke transaksi`);
+    setRecentVersion((version) => version + 1);
+  }
+
+  async function handleSendReceipt() {
+    if (!lastSaved) return;
+    let phone = lastSaved.customerPhone;
+    if (!phone) {
+      phone = window.prompt("Nomor HP untuk kirim struk (08xxx)") ?? "";
+      if (!phone.trim()) return;
+    }
+    const [transaction, items] = await Promise.all([
+      getTransaction(lastSaved.id),
+      getTransactionItems(lastSaved.id),
+    ]);
+    if (!transaction) {
+      toast("Transaksi tidak ditemukan", "error");
+      return;
+    }
+    const text = buildReceiptText(transaction, items);
+    window.open(whatsappUrl(phone, text), "_blank");
   }
 
   const keypadVariant = variants.find((variant) => variant.id === keypadVariantId);
@@ -515,6 +601,9 @@ export default function BeliPage() {
                     >
                       <span className="font-bold">{item.name}</span>
                       <span className="text-xs tabular-nums text-ink-soft">
+                        {duplicateNames.has(item.nameNormal)
+                          ? `${formatDate(item.joinedAt)} · `
+                          : ""}
                         ·{item.phoneNormal.slice(-4)}
                       </span>
                     </button>
@@ -685,6 +774,65 @@ export default function BeliPage() {
       >
         {saving ? "Menyimpan..." : "SIMPAN TRANSAKSI"}
       </button>
+
+      {lastSaved && Date.now() - lastSaved.at < 3 * 60 * 1000 && (
+        <section className="rounded-card border-2 border-soy-dark/50 bg-cream p-4">
+          <p className="text-sm font-bold">Transaksi tersimpan</p>
+          {lastSaved.hasCustomer ? (
+            <p className="mt-1 text-xs text-ink-soft">
+              Pembeli: {lastSaved.customerName}
+            </p>
+          ) : (
+            <div className="mt-2 flex flex-col gap-2">
+              <p className="text-xs text-ink-soft">
+                Lupa tanya member? Tempel sekarang (berlaku 3 menit, harga tidak
+                berubah).
+              </p>
+              <input
+                value={attachQuery}
+                onChange={(event) => setAttachQuery(event.target.value)}
+                placeholder="Cari nama / nomor"
+                className={inputClass}
+              />
+              {attachResults.length > 0 && (
+                <ul className="flex flex-col gap-1">
+                  {attachResults.map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => handleAttachLast(item)}
+                        className="flex w-full items-center justify-between rounded-control border-2 border-line bg-white px-3 py-2 text-left text-sm"
+                      >
+                        <span className="font-bold">{item.name}</span>
+                        <span className="text-xs tabular-nums text-ink-soft">
+                          {item.type === "reseller" ? "Reseller" : "Member"} ·
+                          {item.phoneNormal.slice(-4)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={handleSendReceipt}
+              className="flex-1 rounded-control border-2 border-ink bg-soy py-2 text-xs font-bold"
+            >
+              Kirim struk WhatsApp
+            </button>
+            <button
+              type="button"
+              onClick={() => setLastSaved(null)}
+              className="rounded-control border-2 border-line px-3 text-xs font-bold text-ink-soft"
+            >
+              Tutup
+            </button>
+          </div>
+        </section>
+      )}
 
       {keypadVariant && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/50 p-4">

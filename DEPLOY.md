@@ -35,15 +35,17 @@ Di HP: tutup lalu buka lagi (atau tarik-refresh). Tidak perlu install ulang.
 
 ## Instal sebagai aplikasi offline (butuh HTTPS)
 
-Service worker (offline penuh) butuh **secure context** — tidak bisa lewat `http://IP-LAN`.
-Rencana Fase 4. Opsi saat itu:
+Service worker sudah terpasang (`public/sw.js`) dan otomatis aktif **hanya di secure
+context** (HTTPS atau localhost). Di LAN `http://IP:3000` aplikasi tetap jalan normal,
+tapi belum bisa diinstal offline. Pilihan agar bisa instal di HP:
 
 1. **GitHub Pages** — gratis + HTTPS (repo harus publik). Deploy folder `out/`.
 2. **Cloudflare Pages / Netlify** — akun gratis, HTTPS otomatis.
 3. **HTTPS lokal dengan mkcert** — install CA di HP sekali, origin stabil.
 
-Setelah HTTPS + service worker: aplikasi bisa dibuka tanpa jaringan sama sekali,
-transaksi tetap tersimpan lokal, dan backup tetap lewat file.
+Setelah HTTPS: buka sekali saat online supaya app-shell ter-cache, lalu aplikasi bisa
+dibuka tanpa jaringan sama sekali (data sudah lokal). Perbarui aplikasi dengan membuka
+sekali saat online (service worker memakai network-first untuk halaman).
 
 ## Reset / ganti perangkat
 
