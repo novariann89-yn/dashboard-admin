@@ -114,3 +114,5 @@ After code changes, run `npm run restart` so the phone gets the update.
   last transaction, attach member, audit log, WhatsApp receipt.
 - All phases from the revision doc are implemented. Remaining known gap: full offline
   install only works over HTTPS.
+- Production deploy: Vercel (free plan), zero env vars, static export. Config in
+  `vercel.json`. `vercel.json` gives HTTPS → activates the service worker.

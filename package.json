@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "lan": "node scripts/serve-lan.mjs",
+    "cert": "bash scripts/make-cert.sh",
     "restart": "bash scripts/restart-lan.sh --detach",
     "stop": "pkill -f \"[s]erve-lan\" || true"
   },

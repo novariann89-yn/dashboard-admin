@@ -1,11 +1,18 @@
-import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { createServer as createHttpServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { networkInterfaces } from "node:os";
 
+const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const root = fileURLToPath(new URL("../out/", import.meta.url));
 const port = Number(process.env.PORT ?? 3000);
+
+const certPath = join(projectRoot, "certs", "server.crt");
+const keyPath = join(projectRoot, "certs", "server.key");
+const useHttps = existsSync(certPath) && existsSync(keyPath);
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -30,14 +37,7 @@ function lanAddress() {
   return "localhost";
 }
 
-const server = createServer(async (request, response) => {
-  const started = Date.now();
-  response.on("finish", () => {
-    console.log(
-      `${new Date().toISOString()} ${request.method} ${request.url} ${response.statusCode} ${Date.now() - started}ms`,
-    );
-  });
-
+async function handler(request, response) {
   try {
     const url = new URL(request.url ?? "/", "http://localhost");
     let pathname = decodeURIComponent(url.pathname);
@@ -70,9 +70,41 @@ const server = createServer(async (request, response) => {
   } catch {
     response.writeHead(500).end("error");
   }
-});
+}
+
+const logRequest = (request, response) => {
+  const started = Date.now();
+  response.on("finish", () => {
+    console.log(
+      `${new Date().toISOString()} ${request.method} ${request.url} ${response.statusCode} ${Date.now() - started}ms`,
+    );
+  });
+};
+
+const server = useHttps
+  ? createHttpsServer(
+      {
+        key: await readFile(keyPath),
+        cert: await readFile(certPath),
+      },
+      (request, response) => {
+        logRequest(request, response);
+        void handler(request, response);
+      },
+    )
+  : createHttpServer((request, response) => {
+      logRequest(request, response);
+      void handler(request, response);
+    });
+
+const scheme = useHttps ? "https" : "http";
 
 server.listen(port, "0.0.0.0", () => {
-  console.log(`Dashboard Admin siap di http://${lanAddress()}:${port}`);
-  console.log(`Lokal: http://127.0.0.1:${port}`);
+  console.log(`Dashboard Admin siap di ${scheme}://${lanAddress()}:${port}`);
+  console.log(`Lokal: ${scheme}://127.0.0.1:${port}`);
+  if (!useHttps) {
+    console.log(
+      "Mode HTTP: PWA offline belum bisa diinstal. Jalankan 'npm run cert' untuk HTTPS.",
+    );
+  }
 });

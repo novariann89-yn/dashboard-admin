@@ -16,6 +16,9 @@ next-env.d.ts
 *.db-shm
 local.db
 
+# local HTTPS certificates (never commit the CA key)
+/certs/
+
 # env
 .env
 .env.local
