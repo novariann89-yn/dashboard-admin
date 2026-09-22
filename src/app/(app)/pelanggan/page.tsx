@@ -20,11 +20,9 @@ import {
   updateCustomer,
 } from "@/lib/repos/customers";
 import { listVariantsWithProduct } from "@/lib/repos/products";
-import { recordReturn } from "@/lib/repos/returns";
-import { recordPayment } from "@/lib/repos/transactions";
 import { formatPhone, searchCustomers } from "@/lib/search";
 import { useDebouncedValue } from "@/lib/use-debounced";
-import type { Customer, CustomerType, Transaction } from "@/lib/types";
+import type { Customer, Transaction } from "@/lib/types";
 
 export default function PelangganPage() {
   const toast = useToast();

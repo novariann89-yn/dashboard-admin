@@ -1,11 +1,9 @@
 import { formatDateTime, rupiah } from "./format";
 import { normalizePhone } from "./search";
-import type { PaymentMethod, Transaction, TransactionItem } from "./types";
+import type { Transaction, TransactionItem } from "./types";
 
-const METHOD_LABELS: Record<PaymentMethod, string> = {
+const METHOD_LABELS: Record<string, string> = {
   cash: "Tunai",
-  qris: "QRIS",
-  transfer: "Transfer",
 };
 
 export function buildReceiptText(
@@ -21,10 +19,6 @@ export function buildReceiptText(
   lines.push("");
 
   for (const item of items) {
-    if (item.isBonus) {
-      lines.push(`${item.productName} ${item.sizeName} (bonus) x${item.qty}`);
-      continue;
-    }
     lines.push(`${item.productName} ${item.sizeName}`);
     lines.push(
       `${item.qty} x ${rupiah(item.unitPrice)} = ${rupiah(item.unitPrice * item.qty)}`,
@@ -32,26 +26,9 @@ export function buildReceiptText(
   }
 
   lines.push("");
-  lines.push(`Subtotal: ${rupiah(transaction.subtotal)}`);
-  if (transaction.discountTotal > 0) {
-    lines.push(
-      `Diskon${transaction.discountRuleName ? ` (${transaction.discountRuleName})` : ""}: -${rupiah(transaction.discountTotal)}`,
-    );
-  }
-  if (transaction.roundingAdjust !== 0) {
-    lines.push(
-      `Pembulatan: ${transaction.roundingAdjust > 0 ? "+" : "-"}${rupiah(Math.abs(transaction.roundingAdjust))}`,
-    );
-  }
   lines.push(`*TOTAL: ${rupiah(transaction.finalTotal)}*`);
   lines.push(
-    `Bayar: ${METHOD_LABELS[transaction.paymentMethod]}${
-      transaction.paymentStatus === "partial"
-        ? " (DP)"
-        : transaction.paymentStatus === "unpaid"
-          ? " (tempo)"
-          : ""
-    }`,
+    `Bayar: ${METHOD_LABELS[transaction.paymentMethod] ?? METHOD_LABELS.cash}`,
   );
 
   return lines.join("\n");

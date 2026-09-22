@@ -28,11 +28,7 @@ import { formatTime, isTodayWib, rupiah } from "@/lib/format";
 import { listCustomers } from "@/lib/repos/customers";
 import { listVariantsWithProduct } from "@/lib/repos/products";
 import { stockLevel } from "@/lib/repos/stock";
-import {
-  cancelLastTransaction,
-  getTransactionItems,
-  listReceivables,
-} from "@/lib/repos/transactions";
+import { cancelLastTransaction, getTransactionItems } from "@/lib/repos/transactions";
 import { buildReceiptText, whatsappUrl } from "@/lib/receipt";
 import { getSettings } from "@/lib/settings";
 

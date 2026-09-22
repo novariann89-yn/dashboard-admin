@@ -1,11 +1,5 @@
 import { startOfTodayWib, wibDateString } from "./format";
-import type {
-  BuyerType,
-  Expense,
-  StockMovement,
-  Transaction,
-  TransactionItem,
-} from "./types";
+import type { BuyerType, Expense, Transaction, TransactionItem } from "./types";
 
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 86400000;
@@ -76,27 +70,20 @@ function inPeriod(value: number, period: Period): boolean {
 export interface SummaryInput {
   transactions: Transaction[];
   items: TransactionItem[];
-  movements: StockMovement[];
   expenses: Expense[];
-  variantCosts: Record<string, number>;
   period: Period;
 }
 
 export interface FinancialSummary {
   grossSales: number;
-  discount: number;
   netSales: number;
   rounding: number;
   netRevenue: number;
   hpp: number;
   grossProfit: number;
-  damageLoss: number;
-  expenses: number;
   netProfit: number;
   marginPercent: number | null;
   transactionCount: number;
-  bottlesSold: number;
-  bottlesBonus: number;
 }
 
 function activeTransactionsIn(
@@ -111,74 +98,54 @@ function activeTransactionsIn(
 
 export function summarize(input: SummaryInput): FinancialSummary {
   const transactions = activeTransactionsIn(input.transactions, input.period);
-  const ids = new Set(transactions.map((transaction) => transaction.id));
-  const items = input.items.filter((item) => ids.has(item.transactionId));
+  const items = input.items.filter(
+    (item) => transactions.some((t) => t.id === item.transactionId),
+  );
 
   let grossSales = 0;
   let hpp = 0;
   let bottlesSold = 0;
-  let bottlesBonus = 0;
 
   for (const item of items) {
     hpp += item.unitCost * item.qty;
-    if (item.isBonus) {
-      bottlesBonus += item.qty;
-    } else {
+    if (item.qty > 0) {
       grossSales += item.unitPrice * item.qty;
       bottlesSold += item.qty;
     }
   }
 
-  let discount = 0;
   let rounding = 0;
   let netRevenue = 0;
   for (const transaction of transactions) {
-    discount += transaction.discountTotal;
-    rounding += transaction.roundingAdjust;
     netRevenue += transaction.finalTotal;
   }
 
-  const netSales = grossSales - discount;
+  const netSales = grossSales - rounding;
   const grossProfit = netRevenue - hpp;
-
-  let damageLoss = 0;
-  for (const movement of input.movements) {
-    if (movement.type !== "damage") continue;
-    if (!inPeriod(movement.occurredAt, input.period)) continue;
-    const cost = movement.unitCost ?? input.variantCosts[movement.variantId] ?? 0;
-    damageLoss += Math.abs(movement.qty) * cost;
-  }
 
   const expenseTotal = input.expenses
     .filter((expense) => inPeriod(expense.occurredAt, input.period))
     .reduce((sum, expense) => sum + expense.amount, 0);
 
-  const netProfit = grossProfit - damageLoss - expenseTotal;
+  const netProfit = grossProfit - expenseTotal;
   const marginPercent = netSales > 0 ? (netProfit / netSales) * 100 : null;
 
   return {
     grossSales,
-    discount,
     netSales,
     rounding,
     netRevenue,
     hpp,
     grossProfit,
-    damageLoss,
-    expenses: expenseTotal,
     netProfit,
     marginPercent,
     transactionCount: transactions.length,
-    bottlesSold,
-    bottlesBonus,
   };
 }
 
 export interface ProductRow {
-  variantId: string;
   label: string;
   qtySold: number;
-  qtyBonus: number;
   revenue: number;
   cost: number;
   profit: number;
@@ -190,30 +157,24 @@ export function byProduct(input: SummaryInput): ProductRow[] {
   const ids = new Set(transactions.map((transaction) => transaction.id));
   const items = input.items.filter((item) => ids.has(item.transactionId));
 
-  const map = new Map<string, ProductRow>();
+  const map = new Map<string, { label: string; cost: number; revenue: number; qtySold: number }>();
 
   for (const item of items) {
-    const row =
-      map.get(item.variantId) ??
-      ({
-        variantId: item.variantId,
-        label: `${item.productName} ${item.sizeName}`,
-        qtySold: 0,
-        qtyBonus: 0,
-        revenue: 0,
-        cost: 0,
-        profit: 0,
-        marginPercent: null,
-      } satisfies ProductRow);
+    const label = `Produk ${item.variantId}`;
 
-    row.cost += item.unitCost * item.qty;
-    if (item.isBonus) {
-      row.qtyBonus += item.qty;
+    const existing = map.get(item.variantId);
+    if (existing) {
+      existing.cost += item.unitCost * item.qty;
+      existing.revenue += item.unitPrice * item.qty;
+      existing.qtySold += item.qty;
     } else {
-      row.qtySold += item.qty;
-      row.revenue += item.unitPrice * item.qty - item.lineDiscount;
+      map.set(item.variantId, {
+        label,
+        cost: item.unitCost * item.qty,
+        revenue: item.unitPrice * item.qty,
+        qtySold: item.qty,
+      });
     }
-    map.set(item.variantId, row);
   }
 
   return Array.from(map.values())
@@ -238,7 +199,6 @@ export interface BuyerRow {
 const BUYER_LABELS: Record<BuyerType, string> = {
   umum: "Umum",
   member: "Member",
-  reseller: "Reseller",
 };
 
 export function byBuyerType(input: SummaryInput): BuyerRow[] {
@@ -253,18 +213,16 @@ export function byBuyerType(input: SummaryInput): BuyerRow[] {
   const groups: Record<BuyerType, BuyerRow> = {
     umum: { buyerType: "umum", label: BUYER_LABELS.umum, transactions: 0, revenue: 0, profit: 0, marginPercent: null },
     member: { buyerType: "member", label: BUYER_LABELS.member, transactions: 0, revenue: 0, profit: 0, marginPercent: null },
-    reseller: { buyerType: "reseller", label: BUYER_LABELS.reseller, transactions: 0, revenue: 0, profit: 0, marginPercent: null },
   };
 
   for (const transaction of transactions) {
-    const row = groups[transaction.buyerType];
-    row.transactions += 1;
+    const group = groups[transaction.buyerType];
+    if (!group) continue;
+    group.transactions += 1;
 
     for (const item of itemsByTransaction.get(transaction.id) ?? []) {
-      row.profit -= item.unitCost * item.qty;
-      if (!item.isBonus) {
-        row.revenue += item.unitPrice * item.qty - item.lineDiscount;
-      }
+      group.profit -= item.unitCost * item.qty;
+      group.revenue += item.unitPrice * item.qty;
     }
   }
 

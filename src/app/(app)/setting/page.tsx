@@ -15,8 +15,6 @@ import {
 } from "@/components/ui";
 import { listAudit } from "@/lib/repos/audit";
 import { downloadBackup, importBackup } from "@/lib/backup";
-import { DiscountRulesSection } from "@/components/discount-rules";
-import { ResellerSection } from "@/components/reseller-levels";
 import { marginPercent } from "@/lib/pricing";
 import { formatDateTime } from "@/lib/format";
 import { hashPin, isValidPin, randomSalt, verifyPin } from "@/lib/pin";
@@ -76,10 +74,6 @@ export default function SettingPage() {
         step={settings?.roundingStep ?? 500}
         loaded={settings !== null}
       />
-
-      <ResellerSection />
-
-      <DiscountRulesSection />
 
       <AuditSection />
 
@@ -246,7 +240,7 @@ function ProductBlock({
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-sm font-extrabold">{product.name}</p>
-          <p className="text-[11px] text-ink-soft">{product.category}</p>
+          <p className="text-[11px] text-ink-soft">{product.emoji}</p>
         </div>
         <div className="flex items-center gap-2">
           <span className={product.active ? statusActiveClass : badgeClass}>
@@ -345,7 +339,6 @@ function VariantEditor({ variant }: { variant: ProductVariant }) {
   const toast = useToast();
   const [sizeName, setSizeName] = useState(variant.sizeName);
   const [sellPrice, setSellPrice] = useState(variant.sellPrice);
-  const [resellerPrice, setResellerPrice] = useState(variant.resellerPrice);
   const [costPrice, setCostPrice] = useState(variant.costPrice);
 
   const margin = marginPercent(sellPrice, costPrice);
@@ -355,7 +348,6 @@ function VariantEditor({ variant }: { variant: ProductVariant }) {
     await updateVariant(variant.id, {
       sizeName,
       sellPrice,
-      resellerPrice,
       costPrice,
     });
     toast("Varian disimpan");
@@ -383,12 +375,6 @@ function VariantEditor({ variant }: { variant: ProductVariant }) {
 
       <div className="mt-2 grid grid-cols-3 gap-2">
         <NumberField label="Jual" value={sellPrice} onChange={setSellPrice} small />
-        <NumberField
-          label="Reseller"
-          value={resellerPrice}
-          onChange={setResellerPrice}
-          small
-        />
         <NumberField label="Modal" value={costPrice} onChange={setCostPrice} small />
       </div>
 

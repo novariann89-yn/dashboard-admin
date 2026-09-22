@@ -12,7 +12,6 @@ import {
 
 const navItems = [
   { href: "/", label: "Beranda", Icon: IconHome },
-  { href: "/beli", label: "Beli", Icon: IconBottle },
   { href: "/pelanggan", label: "Pelanggan", Icon: IconUsers },
   { href: "/stok", label: "Stok", Icon: IconBox },
   { href: "/setting", label: "Setting", Icon: IconSettings },
