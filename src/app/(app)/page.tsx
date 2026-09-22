@@ -37,11 +37,9 @@ export default function BerandaPage() {
 
   const transactions = useLiveQuery(() => getDb().transactions.toArray(), [], []);
   const items = useLiveQuery(() => getDb().transactionItems.toArray(), [], []);
-  const movements = useLiveQuery(() => getDb().stockMovements.toArray(), [], []);
   const expenses = useLiveQuery(() => getDb().expenses.toArray(), [], []);
   const variants = useLiveQuery(() => listVariantsWithProduct(false), [], []);
   const settings = useLiveQuery(() => getSettings(), [], null);
-  const receivables = useLiveQuery(() => listReceivables(), [], []);
   const customers = useLiveQuery(() => listCustomers(), [], []);
 
   const [periodValue, setPeriodValue] = useState<PeriodValue>({
@@ -52,7 +50,7 @@ export default function BerandaPage() {
   const variantCosts = Object.fromEntries(
     variants.map((variant) => [variant.id, variant.costPrice]),
   );
-  const input = { transactions, items, movements, expenses, variantCosts };
+  const input = { transactions, items, expenses, variantCosts };
   const period = resolvePeriod(periodValue.preset, periodValue.day);
 
   const summary = summarize({ ...input, period });
@@ -112,7 +110,7 @@ export default function BerandaPage() {
     const transaction = transactions.find((item) => item.id === transactionId);
     if (!transaction) return;
     let phone = transaction.customerId
-      ? (customers.find((item) => item.id === transaction.customerId)?.phone ?? "")
+      ? (customers.find((item) => item.id === transaction.customerId)?.phoneNormal ?? "")
       : "";
     if (!phone) {
       phone = window.prompt("Nomor HP tujuan (08xxx)") ?? "";
@@ -185,12 +183,7 @@ export default function BerandaPage() {
         <div className={cardClass}>
           <p className="text-xs font-semibold text-ink-soft">Botol terjual</p>
           <p className="mt-1 text-xl font-extrabold tabular-nums">
-            {summary.bottlesSold}
-            {summary.bottlesBonus > 0 && (
-              <span className="ml-1 text-xs font-bold text-soy-dark">
-                +{summary.bottlesBonus} bonus
-              </span>
-            )}
+            —
           </p>
           <p className="text-[10px] tabular-nums text-ink-soft">
             Hari ini: {todayBottles}
@@ -269,12 +262,11 @@ export default function BerandaPage() {
         ) : (
           <ul className="mt-2 flex flex-col divide-y divide-line">
             {products.slice(0, 8).map((row) => (
-              <li key={row.variantId} className="flex items-center justify-between py-2">
+              <li key={row.label} className="flex items-center justify-between py-2">
                 <span className="text-xs">
                   <span className="font-bold">{row.label}</span>
                   <span className="block text-[11px] tabular-nums text-ink-soft">
                     {row.qtySold} terjual
-                    {row.qtyBonus > 0 ? ` · ${row.qtyBonus} bonus` : ""}
                   </span>
                 </span>
                 <span className="text-right text-xs">
@@ -326,18 +318,6 @@ export default function BerandaPage() {
             ))}
           </ul>
         </section>
-      )}
-
-      {receivables.length > 0 && (
-        <Link
-          href="/piutang"
-          className="flex items-center justify-between rounded-card border-2 border-brick/40 bg-brick/10 p-4"
-        >
-          <span className="text-sm font-bold text-brick">Piutang belum dibayar</span>
-          <span className="text-sm font-extrabold tabular-nums text-brick">
-            {rupiah(receivables.reduce((sum, item) => sum + item.remaining, 0))}
-          </span>
-        </Link>
       )}
 
       {missingCost.length > 0 && (
@@ -403,7 +383,7 @@ export default function BerandaPage() {
                   <span className="block text-sm font-bold tabular-nums">
                     {rupiah(transaction.finalTotal)}
                   </span>
-                  {transaction.cancelled && (
+{transaction.cancelled && (
                     <span className={statusVoidClass}>
                       dibatalkan
                       {transaction.cancelReason
@@ -411,12 +391,6 @@ export default function BerandaPage() {
                         : ""}
                     </span>
                   )}
-                  {!transaction.cancelled &&
-                    transaction.paymentStatus !== "paid" && (
-                      <span className={`${badgeClass} mt-0.5`}>
-                        {transaction.paymentStatus === "partial" ? "DP" : "tempo"}
-                      </span>
-                    )}
                   <span className="mt-1 flex justify-end gap-2">
                     {transaction.id === latestActive?.id && canCancelLatest && (
                       <button

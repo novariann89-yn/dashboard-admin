@@ -12,16 +12,9 @@ import type { Customer } from "./types";
 function customer(partial: Partial<Customer>): Customer {
   return {
     id: partial.id ?? partial.name ?? "id",
-    type: "member",
     name: partial.name ?? "Tanpa Nama",
     nameNormal: normalizeName(partial.name ?? "Tanpa Nama"),
-    phone: partial.phone ?? "081200000000",
-    phoneNormal: normalizePhone(partial.phone ?? "081200000000") ?? "081200000000",
-    address: null,
-    note: null,
-    resellerLevelId: null,
-    suggestedPrice: null,
-    joinedAt: 0,
+    phoneNormal: normalizePhone(partial.phoneNormal ?? "081200000000") ?? "081200000000",
     active: true,
     ...partial,
   };
@@ -74,9 +67,9 @@ describe("normalizeName", () => {
 
 describe("ranking", () => {
   const customers = [
-    customer({ id: "1", name: "Budi Santoso", phone: "081234567890" }),
-    customer({ id: "2", name: "Siti Aminah", phone: "081298765432" }),
-    customer({ id: "3", name: "Shinta Dewi", phone: "081277778888" }),
+    customer({ id: "1", name: "Budi Santoso", phoneNormal: "081234567890" }),
+    customer({ id: "2", name: "Siti Aminah", phoneNormal: "081298765432" }),
+    customer({ id: "3", name: "Shinta Dewi", phoneNormal: "081277778888" }),
   ];
 
   it("finds exact names first", () => {

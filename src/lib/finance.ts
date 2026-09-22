@@ -84,6 +84,8 @@ export interface FinancialSummary {
   netProfit: number;
   marginPercent: number | null;
   transactionCount: number;
+  expenses: number;
+  damageLoss: number;
 }
 
 function activeTransactionsIn(
@@ -140,6 +142,8 @@ export function summarize(input: SummaryInput): FinancialSummary {
     netProfit,
     marginPercent,
     transactionCount: transactions.length,
+    expenses: expenseTotal,
+    damageLoss: 0,
   };
 }
 
