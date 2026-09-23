@@ -5,7 +5,7 @@ import { newId } from "../id";
 
 export interface VariantWithProduct extends ProductVariant {
   productName: string;
-  category: string;
+  productEmoji: string;
 }
 
 export async function listStock(): Promise<VariantWithProduct[]> {
