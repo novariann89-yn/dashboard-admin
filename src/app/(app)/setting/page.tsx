@@ -194,14 +194,14 @@ function AuditSection() {
 function AddProductForm({ onDone }: { onDone: () => void }) {
   const toast = useToast();
   const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
+  const [emoji, setEmoji] = useState("🥛");
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!name.trim()) return;
-    await createProduct({ name, category: category || "Umum" });
+    await createProduct({ name, emoji: emoji || "🥛" });
     setName("");
-    setCategory("");
+    setEmoji("🥛");
     toast("Produk ditambah");
     onDone();
   }
@@ -215,9 +215,9 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
         className={inputClass}
       />
       <input
-        value={category}
-        onChange={(event) => setCategory(event.target.value)}
-        placeholder="Kategori (opsional)"
+        value={emoji}
+        onChange={(event) => setEmoji(event.target.value)}
+        placeholder="Emoji (mis. 🥛)"
         className={inputClass}
       />
       <button className={buttonClass}>Tambah produk</button>
@@ -293,7 +293,6 @@ function AddVariantForm({
   const toast = useToast();
   const [sizeName, setSizeName] = useState("");
   const [sellPrice, setSellPrice] = useState(0);
-  const [resellerPrice, setResellerPrice] = useState(0);
   const [costPrice, setCostPrice] = useState(0);
 
   async function submit(event: FormEvent) {
@@ -303,7 +302,6 @@ function AddVariantForm({
       productId,
       sizeName,
       sellPrice,
-      resellerPrice,
       costPrice,
     });
     toast("Varian ditambah");
@@ -321,13 +319,8 @@ function AddVariantForm({
         placeholder="Nama ukuran (mis. Botol Kecil 250ml)"
         className={inputClass}
       />
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <NumberField label="Harga jual" value={sellPrice} onChange={setSellPrice} />
-        <NumberField
-          label="Harga reseller"
-          value={resellerPrice}
-          onChange={setResellerPrice}
-        />
         <NumberField label="Modal" value={costPrice} onChange={setCostPrice} />
       </div>
       <button className={buttonClass}>Tambah varian</button>

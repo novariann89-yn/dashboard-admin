@@ -1,6 +1,6 @@
 import { getDb } from "../db";
 import { newId } from "../id";
-import type { PriceHistory, Product, ProductVariant } from "../types";
+import type { Product, ProductVariant } from "../types";
 import { logAudit } from "./audit";
 
 export async function listProducts(): Promise<Product[]> {
@@ -17,7 +17,7 @@ export async function listVariants(activeOnly = false): Promise<ProductVariant[]
 
 export interface VariantWithProduct extends ProductVariant {
   productName: string;
-  category: string;
+  productEmoji: string;
 }
 
 export async function listVariantsWithProduct(
@@ -33,13 +33,13 @@ export async function listVariantsWithProduct(
   return variants.flatMap((variant) => {
     const product = byId.get(variant.productId);
     if (!product) return [];
-    return [{ ...variant, productName: product.name, category: product.category }];
+    return [{ ...variant, productName: product.name, productEmoji: product.emoji }];
   });
 }
 
 export async function createProduct(input: {
   name: string;
-  category?: string;
+  emoji?: string;
   sortOrder?: number;
 }): Promise<Product> {
   const db = getDb();
@@ -47,7 +47,7 @@ export async function createProduct(input: {
   const product: Product = {
     id: newId(),
     name: input.name.trim(),
-    category: (input.category ?? "Umum").trim() || "Umum",
+    emoji: (input.emoji ?? "🥛").trim() || "🥛",
     active: true,
     sortOrder: input.sortOrder ?? existing + 1,
     createdAt: Date.now(),
@@ -58,7 +58,7 @@ export async function createProduct(input: {
 
 export async function updateProduct(
   id: string,
-  patch: Partial<Pick<Product, "name" | "category" | "active" | "sortOrder">>,
+  patch: Partial<Pick<Product, "name" | "emoji" | "active" | "sortOrder">>,
 ): Promise<void> {
   await getDb().products.update(id, patch);
 }
@@ -67,7 +67,6 @@ export async function createVariant(input: {
   productId: string;
   sizeName: string;
   sellPrice: number;
-  resellerPrice: number;
   costPrice: number;
   sortOrder?: number;
 }): Promise<ProductVariant> {
@@ -78,7 +77,6 @@ export async function createVariant(input: {
     productId: input.productId,
     sizeName: input.sizeName.trim(),
     sellPrice: Math.max(0, Math.round(input.sellPrice)),
-    resellerPrice: Math.max(0, Math.round(input.resellerPrice)),
     costPrice: Math.max(0, Math.round(input.costPrice)),
     stock: 0,
     active: true,
@@ -94,7 +92,7 @@ export async function updateVariant(
   patch: Partial<
     Pick<
       ProductVariant,
-      "sizeName" | "sellPrice" | "resellerPrice" | "costPrice" | "active" | "sortOrder"
+      "sizeName" | "sellPrice" | "costPrice" | "active" | "sortOrder"
     >
   >,
 ): Promise<void> {
@@ -105,30 +103,12 @@ export async function updateVariant(
   const next = {
     ...patch,
     sellPrice: patch.sellPrice !== undefined ? Math.max(0, Math.round(patch.sellPrice)) : undefined,
-    resellerPrice:
-      patch.resellerPrice !== undefined ? Math.max(0, Math.round(patch.resellerPrice)) : undefined,
     costPrice: patch.costPrice !== undefined ? Math.max(0, Math.round(patch.costPrice)) : undefined,
   };
 
   const priceChanged =
     (next.sellPrice !== undefined && next.sellPrice !== current.sellPrice) ||
-    (next.resellerPrice !== undefined && next.resellerPrice !== current.resellerPrice) ||
     (next.costPrice !== undefined && next.costPrice !== current.costPrice);
-
-  await db.transaction("rw", [db.productVariants, db.priceHistory], async () => {
-    await db.productVariants.update(id, next);
-    if (priceChanged) {
-      const history: PriceHistory = {
-        id: newId(),
-        variantId: id,
-        sellPrice: next.sellPrice ?? current.sellPrice,
-        resellerPrice: next.resellerPrice ?? current.resellerPrice,
-        costPrice: next.costPrice ?? current.costPrice,
-        createdAt: Date.now(),
-      };
-      await db.priceHistory.add(history);
-    }
-  });
 
   if (priceChanged) {
     await logAudit({
@@ -137,21 +117,16 @@ export async function updateVariant(
       recordId: id,
       oldData: {
         sellPrice: current.sellPrice,
-        resellerPrice: current.resellerPrice,
         costPrice: current.costPrice,
       },
       newData: {
         sellPrice: next.sellPrice ?? current.sellPrice,
-        resellerPrice: next.resellerPrice ?? current.resellerPrice,
         costPrice: next.costPrice ?? current.costPrice,
       },
     });
   }
-}
 
-export async function listPriceHistory(variantId: string): Promise<PriceHistory[]> {
-  const rows = await getDb().priceHistory.where("variantId").equals(variantId).toArray();
-  return rows.sort((a, b) => b.createdAt - a.createdAt);
+  await db.productVariants.update(id, next);
 }
 
 export async function variantsWithMissingCost(): Promise<ProductVariant[]> {

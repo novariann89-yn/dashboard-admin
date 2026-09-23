@@ -14,7 +14,6 @@ export interface CreateTransactionInput {
   customerId: string | null;
   items: { variantId: string; qty: number }[];
   paymentMethod: "cash";
-  paidAmount?: number | null;
   note?: string | null;
   occurredAt?: number;
 }
@@ -54,13 +53,11 @@ async function createTransaction(
     if (!variant) throw new Error("Produk tidak ditemukan");
     const product = productsById.get(variant.productId);
 
-    let unitPrice = variant.sellPrice;
-
     return {
       variant,
       productName: product?.name ?? "?",
       qty: Math.floor(item.qty),
-      unitPrice,
+      unitPrice: variant.sellPrice,
       unitCost: variant.costPrice,
     };
   });
@@ -78,28 +75,15 @@ async function createTransaction(
   });
   const marginWarning = finalTotal < Math.round(totalCost * 1.1);
 
-  // Simplified: no discount, just use finalTotal
-  const paidAmount = Math.max(
-    0,
-    Math.round(input.paidAmount ?? finalTotal),
-  );
-
   const transaction: Transaction = {
     id: newId(),
     occurredAt: now,
     buyerType: input.buyerType,
     customerId: input.customerId,
     customerName,
-    subtotal: subtotal,
-    
-    discountRuleId: null,
-    discountRuleName: null,
-    roundingAdjust: roundingAdjust,
-    finalTotal: finalTotal,
+    subtotal,
+    finalTotal,
     paymentMethod: "cash",
-    paymentStatus: "paid",
-    paidAmount,
-    note: input.note ?? null,
     cancelled: false,
     cancelReason: null,
     cancelledAt: null,
@@ -115,11 +99,8 @@ async function createTransaction(
     qty: line.qty,
     unitPrice: line.unitPrice,
     unitCost: line.unitCost,
-    lineDiscount: 0,
-    isBonus: false,
   }));
 
-  // Stock movements: auto-decrement for sales
   const movements: StockMovement[] = prepared.map((line) => ({
     id: newId(),
     variantId: line.variant.id,
@@ -208,7 +189,6 @@ export async function cancelLastTransaction(
     .equals(latest.id)
     .toArray();
 
-  // Restore stock
   for (const item of items) {
     const variant = await db.productVariants.get(item.variantId);
     if (variant) {
