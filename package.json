@@ -8,7 +8,7 @@
   "allowScripts": ["esbuild@*"],
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && cp -r out .next",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "lan": "node scripts/serve-lan.mjs",
