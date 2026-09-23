@@ -201,7 +201,7 @@ export default function BerandaPage() {
         <h2 className={sectionLabelClass}>Rincian keuangan · {period.label}</h2>
         <dl className="mt-3 flex flex-col gap-1.5 text-sm">
           <Row label="Omzet (kotor)" value={summary.grossSales} />
-          <Row label="Diskon" value={-summary.discount} />
+          <Row label="Diskon" value={0} />
           <Row label="Penjualan bersih" value={summary.netSales} strong />
           {summary.rounding !== 0 && (
             <Row label="Pembulatan" value={summary.rounding} />

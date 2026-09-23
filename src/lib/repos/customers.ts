@@ -1,16 +1,12 @@
 import { getDb } from "../db";
 import { newId } from "../id";
 import { normalizeName, normalizePhone, searchCustomers } from "../search";
-import type { Customer, CustomerType } from "../types";
+import type { Customer, BuyerType } from "../types";
 import { listVariantsWithProduct } from "./products";
 
 export async function createCustomer(input: {
-  type: CustomerType;
   name: string;
   phone: string;
-  address?: string | null;
-  note?: string | null;
-  suggestedPrice?: number | null;
 }): Promise<Customer> {
   const db = getDb();
   const name = input.name.trim();
@@ -23,7 +19,6 @@ export async function createCustomer(input: {
   const duplicate = await db.customers
     .where("phoneNormal")
     .equals(phoneNormal)
-    .filter((customer) => customer.type === input.type)
     .first();
 
   if (duplicate) {
@@ -32,16 +27,9 @@ export async function createCustomer(input: {
 
   const customer: Customer = {
     id: newId(),
-    type: input.type,
     name,
     nameNormal: normalizeName(name),
-    phone,
     phoneNormal,
-    address: input.address ?? null,
-    note: input.note ?? null,
-    resellerLevelId: null,
-    suggestedPrice: input.suggestedPrice ?? null,
-    joinedAt: Date.now(),
     active: true,
   };
 
@@ -51,12 +39,7 @@ export async function createCustomer(input: {
 
 export async function updateCustomer(
   id: string,
-  patch: Partial<
-    Pick<
-      Customer,
-      "name" | "phone" | "address" | "note" | "active" | "suggestedPrice" | "resellerLevelId"
-    >
-  >,
+  patch: Partial<Pick<Customer, "name" | "phoneNormal" | "active">>,
 ): Promise<void> {
   const db = getDb();
   const current = await db.customers.get(id);
@@ -69,10 +52,9 @@ export async function updateCustomer(
     next.nameNormal = normalizeName(patch.name);
   }
 
-  if (patch.phone !== undefined) {
-    const phoneNormal = normalizePhone(patch.phone);
+  if (patch.phoneNormal !== undefined) {
+    const phoneNormal = normalizePhone(patch.phoneNormal);
     if (!phoneNormal) throw new Error("Nomor HP tidak valid");
-    next.phone = patch.phone.trim();
     next.phoneNormal = phoneNormal;
   }
 
@@ -83,20 +65,17 @@ export async function getCustomer(id: string): Promise<Customer | undefined> {
   return getDb().customers.get(id);
 }
 
-export async function listCustomers(type?: CustomerType): Promise<Customer[]> {
+export async function listCustomers(type?: BuyerType): Promise<Customer[]> {
   const db = getDb();
-  const rows = type
-    ? await db.customers.where("type").equals(type).toArray()
-    : await db.customers.toArray();
-  return rows.sort((a, b) => b.joinedAt - a.joinedAt);
+  const rows = await db.customers.toArray();
+  return rows.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function searchCustomerRows(
   query: string,
-  type: CustomerType,
   limit = 5,
 ): Promise<Customer[]> {
-  const rows = await listCustomers(type);
+  const rows = await listCustomers();
   return searchCustomers(query, rows, limit).map((entry) => entry.customer);
 }
 
