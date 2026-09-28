@@ -87,8 +87,9 @@ After code changes, run `npm run restart` so the phone gets the update.
   period automatically and past data stays in Histori.
 - Histori (`/laporan`) persists across days and can be filtered by period, exported to CSV,
   and printed to PDF.
-- No manual date inputs for transactions/expenses (dates are automatic). The report period
-  picker is a filter, not data entry.
+- Transaction dates are automatic. Expenses accept an optional manual date (`occurredAt`,
+  default today WIB) via the `Catat Pengeluaran` form in Dompet; the report period picker
+  is a filter, not data entry.
 
 ## Safety rules
 

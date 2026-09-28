@@ -1,7 +1,7 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useToast } from "@/components/toast";
 import {
   buttonClass,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui";
 import { formatDateTime, rupiah, wibDateString } from "@/lib/format";
 import {
+  EXPENSE_CATEGORIES,
   createExpense,
   deleteExpense,
   listExpenses,
@@ -19,6 +20,7 @@ import { getDb } from "@/lib/db";
 import { listVariantsWithProduct, profitPerUnit } from "@/lib/repos/products";
 import { listExpensePresets } from "@/lib/repos/expense-presets";
 import { isTodayWib } from "@/lib/format";
+import { resolvePeriod } from "@/lib/finance";
 
 export default function DompetPage() {
   const toast = useToast();
@@ -28,9 +30,18 @@ export default function DompetPage() {
   const variants = useLiveQuery(() => listVariantsWithProduct(false), [], []);
   const presets = useLiveQuery(() => listExpensePresets(), [], []);
 
+  const [date, setDate] = useState(wibDateString());
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+
+  const categorySuggestions = useMemo(
+    () =>
+      Array.from(
+        new Set([...presets.map((preset) => preset.name), ...EXPENSE_CATEGORIES]),
+      ).sort((a, b) => a.localeCompare(b, "id")),
+    [presets],
+  );
 
   const today = wibDateString();
   const todayTransactions = transactions.filter(
@@ -64,14 +75,31 @@ export default function DompetPage() {
 
   async function handleSaveExpense() {
     try {
-      if (!category || !amount || Number(amount) <= 0) {
-        toast("Kategori dan nominal wajib diisi", "error");
+      if (!amount || Number(amount) <= 0) {
+        toast("Nominal wajib diisi", "error");
         return;
       }
-      await createExpense({ category, amount: Number(amount), note: note || null });
+      if (!date) {
+        toast("Tanggal wajib diisi", "error");
+        return;
+      }
+      const occurredAt =
+        date === today
+          ? Date.now()
+          : resolvePeriod("day", date).from + 12 * 60 * 60 * 1000;
+      await createExpense({
+        category,
+        amount: Number(amount),
+        note: note || null,
+        occurredAt,
+      });
       setAmount("");
       setNote("");
-      toast("Pengeluaran dicatat");
+      toast(
+        date === today
+          ? "Pengeluaran dicatat"
+          : "Pengeluaran dicatat (lihat Histori)",
+      );
     } catch (error) {
       toast(error instanceof Error ? error.message : "Gagal mencatat", "error");
     }
@@ -135,37 +163,47 @@ export default function DompetPage() {
       </section>
 
       <section className={cardClass}>
-        <h2 className={sectionLabelClass}>Pengeluaran Hari Ini</h2>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {presets.length === 0 && (
-            <p className="text-[11px] text-ink-soft">
-              Belum ada kategori. Atur di Setting.
-            </p>
-          )}
-          {presets.map((preset) => (
-            <button
-              key={preset.id}
-              type="button"
-              onClick={() => setCategory(preset.name)}
-              className={`rounded-control border-2 px-2 py-1.5 text-[11px] font-bold ${
-                category === preset.name
-                  ? "border-ink bg-primary text-white"
-                  : "border-line bg-surface text-ink-soft"
-              }`}
-            >
-              {preset.name}
-            </button>
-          ))}
+        <h2 className={sectionLabelClass}>Catat Pengeluaran</h2>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-ink-soft">
+              Tanggal
+            </span>
+            <input
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+              className={inputClass}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-ink-soft">
+              Nominal (Rp)
+            </span>
+            <input
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              inputMode="numeric"
+              placeholder="0"
+              className={`${inputClass} text-right font-bold tabular-nums`}
+            />
+          </label>
         </div>
 
-        <div className="mt-3 flex flex-col gap-2">
+        <div className="mt-2 flex flex-col gap-2">
           <input
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-            inputMode="numeric"
-            placeholder="Nominal (Rp)"
-            className={`${inputClass} text-right text-lg font-bold tabular-nums`}
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+            list="expense-categories"
+            placeholder="Kategori (pilih atau ketik)"
+            className={inputClass}
           />
+          <datalist id="expense-categories">
+            {categorySuggestions.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
           <input
             value={note}
             onChange={(event) => setNote(event.target.value)}
@@ -175,6 +213,11 @@ export default function DompetPage() {
           <button type="button" onClick={handleSaveExpense} className={buttonClass}>
             Simpan Pengeluaran
           </button>
+          {date !== today && (
+            <p className="text-[11px] text-ink-soft">
+              Tanggal selain hari ini tidak muncul di daftar ini — lihat Histori.
+            </p>
+          )}
         </div>
 
         {todayExpenses.length === 0 ? (

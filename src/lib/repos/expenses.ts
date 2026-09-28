@@ -24,13 +24,19 @@ export async function createExpense(input: {
   category: string;
   amount: number;
   note?: string | null;
+  occurredAt?: number;
 }): Promise<Expense> {
   const amount = Math.max(0, Math.round(input.amount));
   if (amount <= 0) throw new Error("Nominal harus lebih dari 0");
 
+  const occurredAt = input.occurredAt ?? Date.now();
+  if (!Number.isFinite(occurredAt) || occurredAt <= 0) {
+    throw new Error("Tanggal tidak valid");
+  }
+
   const expense: Expense = {
     id: newId(),
-    occurredAt: Date.now(),
+    occurredAt,
     category: input.category.trim() || "Lain-lain",
     amount,
     note: input.note ?? null,
@@ -41,7 +47,11 @@ export async function createExpense(input: {
     action: "create_expense",
     table: "expenses",
     recordId: expense.id,
-    newData: { category: expense.category, amount: expense.amount },
+    newData: {
+      category: expense.category,
+      amount: expense.amount,
+      occurredAt: expense.occurredAt,
+    },
   });
   return expense;
 }
