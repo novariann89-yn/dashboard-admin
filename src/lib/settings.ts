@@ -26,10 +26,31 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: "system",
 };
 
+const STORE_NAME_CACHE_KEY = "toko-store-name";
+
+export function getCachedStoreName(): string {
+  if (typeof window === "undefined") return DEFAULT_SETTINGS.storeName;
+  try {
+    return (
+      window.localStorage.getItem(STORE_NAME_CACHE_KEY) ||
+      DEFAULT_SETTINGS.storeName
+    );
+  } catch {
+    return DEFAULT_SETTINGS.storeName;
+  }
+}
+
 export async function getSettings(): Promise<AppSettings> {
   const rows = await getDb().settings.toArray();
   const raw: Record<string, string> = {};
   for (const row of rows) raw[row.key] = row.value;
+
+  const storeName = raw.storeName || DEFAULT_SETTINGS.storeName;
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(STORE_NAME_CACHE_KEY, storeName);
+    } catch {}
+  }
 
   return {
     roundingEnabled: raw.roundingEnabled
@@ -51,6 +72,11 @@ export async function getSettings(): Promise<AppSettings> {
 }
 
 export async function updateSettings(patch: Partial<AppSettings>): Promise<void> {
+  if (patch.storeName !== undefined && typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(STORE_NAME_CACHE_KEY, patch.storeName);
+    } catch {}
+  }
   const entries = Object.entries(patch).map(([key, value]) => ({
     key,
     value: typeof value === "string" ? value : JSON.stringify(value),

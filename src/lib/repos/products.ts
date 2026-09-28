@@ -136,3 +136,14 @@ export async function variantsWithMissingCost(): Promise<ProductVariant[]> {
   const variants = await listVariants(true);
   return variants.filter((variant) => variant.costPrice <= 0);
 }
+
+export function profitPerUnit(input: {
+  netProfitSnapshot?: number | null;
+  unitPrice: number;
+  unitCost: number;
+}): number {
+  if (typeof input.netProfitSnapshot === "number" && input.netProfitSnapshot > 0) {
+    return input.netProfitSnapshot;
+  }
+  return input.unitPrice - input.unitCost;
+}

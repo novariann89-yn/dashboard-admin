@@ -14,6 +14,20 @@ import {
   statusActiveClass,
 } from "@/components/ui";
 import { listAudit } from "@/lib/repos/audit";
+import { getDb } from "@/lib/db";
+import {
+  createExpensePreset,
+  deleteExpensePreset,
+  listExpensePresets,
+  updateExpensePreset,
+} from "@/lib/repos/expense-presets";
+import {
+  createUser,
+  deleteUser,
+  getSession,
+  requireRole,
+  updateUser,
+} from "@/lib/auth";
 import { downloadBackup, importBackup } from "@/lib/backup";
 import { marginPercent } from "@/lib/pricing";
 import { formatDateTime } from "@/lib/format";
@@ -70,6 +84,11 @@ export default function SettingPage() {
         </div>
       </section>
 
+      <StoreSection
+        storeName={settings?.storeName ?? ""}
+        loaded={settings !== null}
+      />
+
       <AppearanceSection
         theme={settings?.theme ?? "system"}
         loaded={settings !== null}
@@ -81,9 +100,13 @@ export default function SettingPage() {
         loaded={settings !== null}
       />
 
+      <ExpensePresetSection />
+
       <AuditSection />
 
       <PinSection />
+
+      <AccountsSection />
 
       <section className={cardClass}>
         <h2 className={sectionLabelClass}>Backup data</h2>
@@ -154,6 +177,51 @@ export default function SettingPage() {
         </p>
       </section>
     </div>
+  );
+}
+
+function StoreSection({
+  storeName,
+  loaded,
+}: {
+  storeName: string;
+  loaded: boolean;
+}) {
+  const toast = useToast();
+  const [name, setName] = useState(storeName);
+
+  useEffect(() => {
+    if (!loaded) return;
+    setName(storeName);
+  }, [loaded, storeName]);
+
+  return (
+    <section className={cardClass}>
+      <h2 className={sectionLabelClass}>Nama Toko</h2>
+      <p className="mt-1 text-xs text-ink-soft">
+        Nama ini dipakai di struk WhatsApp.
+      </p>
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!name.trim()) {
+            toast("Nama toko wajib diisi", "error");
+            return;
+          }
+          await updateSettings({ storeName: name.trim() });
+          toast("Nama toko disimpan");
+        }}
+        className="mt-3 flex flex-col gap-2"
+      >
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="mis. Toko Mas Andik"
+          className={inputClass}
+        />
+        <button className={buttonClass}>Simpan nama toko</button>
+      </form>
+    </section>
   );
 }
 
@@ -300,6 +368,7 @@ function AddVariantForm({
   const [sizeName, setSizeName] = useState("");
   const [sellPrice, setSellPrice] = useState(0);
   const [costPrice, setCostPrice] = useState(0);
+  const [netProfitPerUnit, setNetProfitPerUnit] = useState(0);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -309,6 +378,7 @@ function AddVariantForm({
       sizeName,
       sellPrice,
       costPrice,
+      netProfitPerUnit,
     });
     toast("Varian ditambah");
     onDone();
@@ -322,12 +392,17 @@ function AddVariantForm({
       <input
         value={sizeName}
         onChange={(event) => setSizeName(event.target.value)}
-        placeholder="Nama ukuran (mis. Botol Kecil 250ml)"
+        placeholder="Nama ukuran (mis. Kecil 250ml)"
         className={inputClass}
       />
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <NumberField label="Harga jual" value={sellPrice} onChange={setSellPrice} />
         <NumberField label="Modal" value={costPrice} onChange={setCostPrice} />
+        <NumberField
+          label="Profit/unit (0=auto)"
+          value={netProfitPerUnit}
+          onChange={setNetProfitPerUnit}
+        />
       </div>
       <button className={buttonClass}>Tambah varian</button>
     </form>
@@ -339,6 +414,9 @@ function VariantEditor({ variant }: { variant: ProductVariant }) {
   const [sizeName, setSizeName] = useState(variant.sizeName);
   const [sellPrice, setSellPrice] = useState(variant.sellPrice);
   const [costPrice, setCostPrice] = useState(variant.costPrice);
+  const [netProfitPerUnit, setNetProfitPerUnit] = useState(
+    variant.netProfitPerUnit,
+  );
 
   const margin = marginPercent(sellPrice, costPrice);
   const marginWarning = costPrice <= 0 || (margin !== null && margin < 20);
@@ -348,6 +426,7 @@ function VariantEditor({ variant }: { variant: ProductVariant }) {
       sizeName,
       sellPrice,
       costPrice,
+      netProfitPerUnit,
     });
     toast("Varian disimpan");
   }
@@ -375,6 +454,12 @@ function VariantEditor({ variant }: { variant: ProductVariant }) {
       <div className="mt-2 grid grid-cols-3 gap-2">
         <NumberField label="Jual" value={sellPrice} onChange={setSellPrice} small />
         <NumberField label="Modal" value={costPrice} onChange={setCostPrice} small />
+        <NumberField
+          label="Profit (0=auto)"
+          value={netProfitPerUnit}
+          onChange={setNetProfitPerUnit}
+          small
+        />
       </div>
 
       <div className="mt-2 flex items-center justify-between">
@@ -623,6 +708,313 @@ function PinSection() {
         />
         <button className={buttonClass}>Simpan PIN</button>
       </form>
+    </section>
+  );
+}
+
+function ExpensePresetSection() {
+  const toast = useToast();
+  const presets = useLiveQuery(() => listExpensePresets(false), [], []);
+  const [name, setName] = useState("");
+
+  async function run(action: () => Promise<void>, success: string) {
+    try {
+      await action();
+      toast(success);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Gagal menyimpan", "error");
+    }
+  }
+
+  return (
+    <section className={cardClass}>
+      <h2 className={sectionLabelClass}>Kategori Pengeluaran</h2>
+      <p className="mt-1 text-xs text-ink-soft">
+        Tombol cepat saat mencatat pengeluaran di halaman Dompet.
+      </p>
+
+      {presets.length === 0 ? (
+        <p className="mt-2 text-sm text-ink-soft">Belum ada kategori.</p>
+      ) : (
+        <ul className="mt-3 flex flex-col divide-y divide-line">
+          {presets.map((preset) => (
+            <li key={preset.id} className="flex items-center gap-2 py-2">
+              <input
+                defaultValue={preset.name}
+                onBlur={async (event) => {
+                  const value = event.target.value.trim();
+                  if (!value || value === preset.name) return;
+                  await run(
+                    () => updateExpensePreset(preset.id, { name: value }),
+                    "Kategori diperbarui",
+                  );
+                }}
+                className="w-full rounded-control border border-line bg-surface px-2 py-1.5 text-xs font-bold"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  run(
+                    () =>
+                      updateExpensePreset(preset.id, {
+                        active: !preset.active,
+                      }),
+                    "Kategori diperbarui",
+                  )
+                }
+                className="shrink-0 text-[11px] font-bold text-ink-soft underline"
+              >
+                {preset.active ? "Nonaktifkan" : "Aktifkan"}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!window.confirm(`Hapus kategori ${preset.name}?`)) return;
+                  await run(
+                    () => deleteExpensePreset(preset.id),
+                    "Kategori dihapus",
+                  );
+                }}
+                className="shrink-0 text-[11px] font-bold text-error underline"
+              >
+                Hapus
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!name.trim()) return;
+          await run(async () => {
+            await createExpensePreset(name);
+            setName("");
+          }, "Kategori ditambah");
+        }}
+        className="mt-3 flex gap-2"
+      >
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Kategori baru"
+          className={inputClass}
+        />
+        <button className={`${buttonClass} shrink-0`}>Tambah</button>
+      </form>
+    </section>
+  );
+}
+
+const PERMISSION_OPTIONS = [
+  { value: "beranda", label: "Beranda" },
+  { value: "pelanggan", label: "Pelanggan" },
+  { value: "stok", label: "Stok" },
+  { value: "historis", label: "Histori" },
+];
+
+function AccountsSection() {
+  const toast = useToast();
+  const users = useLiveQuery(() => getDb().users.toArray(), [], []);
+  const [isOwner, setIsOwner] = useState(false);
+  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"owner" | "admin">("admin");
+
+  useEffect(() => {
+    setIsOwner(requireRole("owner"));
+    setCurrentId(getSession()?.userId ?? null);
+  }, []);
+
+  async function run(action: () => Promise<void>, success: string) {
+    try {
+      await action();
+      toast(success);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Gagal menyimpan", "error");
+    }
+  }
+
+  if (!isOwner) return null;
+
+  const activeOwners = users.filter(
+    (user) => user.role === "owner" && user.active,
+  ).length;
+
+  return (
+    <section className={cardClass}>
+      <div className="flex items-center justify-between">
+        <h2 className={sectionLabelClass}>Akun Pengguna</h2>
+        <button
+          type="button"
+          onClick={() => setShowForm((value) => !value)}
+          className="text-xs font-bold text-ink-soft underline"
+        >
+          {showForm ? "Tutup" : "+ Akun"}
+        </button>
+      </div>
+      <p className="mt-1 text-xs text-ink-soft">
+        Owner bisa akses semua halaman. Admin hanya halaman yang dicentang.
+        Minimal satu owner aktif harus tetap ada.
+      </p>
+
+      {showForm && (
+        <form
+          onSubmit={async (event) => {
+            event.preventDefault();
+            if (!username.trim() || !password.trim()) {
+              toast("ID dan sandi wajib diisi", "error");
+              return;
+            }
+            await run(async () => {
+              await createUser({
+                username: username.trim(),
+                password,
+                role,
+              });
+              setUsername("");
+              setPassword("");
+              setRole("admin");
+              setShowForm(false);
+            }, "Akun ditambah");
+          }}
+          className="mt-3 flex flex-col gap-2 rounded-control border-2 border-dashed border-ink/30 p-2"
+        >
+          <input
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder="ID (username)"
+            className={inputClass}
+          />
+          <input
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Sandi"
+            className={inputClass}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            {(["admin", "owner"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setRole(option)}
+                className={`rounded-control border-2 py-2 text-sm font-bold ${
+                  role === option
+                    ? "border-ink bg-primary text-white"
+                    : "border-line bg-surface text-ink-soft"
+                }`}
+              >
+                {option === "owner" ? "Owner" : "Admin"}
+              </button>
+            ))}
+          </div>
+          <button className={buttonClass}>Simpan akun</button>
+        </form>
+      )}
+
+      <ul className="mt-3 flex flex-col divide-y divide-line">
+        {users.map((user) => {
+          const self = currentId === user.id;
+          const lastOwner =
+            user.role === "owner" && user.active && activeOwners <= 1;
+          const demoteBlocked =
+            user.role === "owner" && (self || activeOwners <= 1);
+          const deactivateBlocked = user.active && (self || lastOwner);
+          return (
+            <li key={user.id} className="py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm">
+                  <span className="font-bold">
+                    {user.username}
+                    {self ? " (kamu)" : ""}
+                  </span>
+                  <span className="block text-[11px] text-ink-soft">
+                    {user.role === "owner" ? "Owner" : "Admin"}
+                    {user.active ? "" : " · nonaktif"}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={demoteBlocked}
+                    onClick={() =>
+                      run(
+                        () =>
+                          updateUser(user.id, {
+                            role: user.role === "owner" ? "admin" : "owner",
+                          }),
+                        "Akun diperbarui",
+                      )
+                    }
+                    className="text-[11px] font-bold text-ink-soft underline disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {user.role === "owner" ? "Jadikan admin" : "Jadikan owner"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deactivateBlocked}
+                    onClick={() =>
+                      run(
+                        () => updateUser(user.id, { active: !user.active }),
+                        "Akun diperbarui",
+                      )
+                    }
+                    className="text-[11px] font-bold text-ink-soft underline disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {user.active ? "Nonaktifkan" : "Aktifkan"}
+                  </button>
+                  {!self && (
+                    <button
+                      type="button"
+                      disabled={lastOwner}
+                      onClick={async () => {
+                        if (!window.confirm(`Hapus akun ${user.username}?`)) return;
+                        await run(() => deleteUser(user.id), "Akun dihapus");
+                      }}
+                      className="text-[11px] font-bold text-error underline disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Hapus
+                    </button>
+                  )}
+                </span>
+              </div>
+
+              {user.role === "admin" && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {PERMISSION_OPTIONS.map((option) => {
+                    const checked = user.permissions.includes(option.value);
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          const next = checked
+                            ? user.permissions.filter((p) => p !== option.value)
+                            : [...user.permissions, option.value];
+                          run(
+                            () => updateUser(user.id, { permissions: next }),
+                            "Hak akses diperbarui",
+                          );
+                        }}
+                        className={`rounded-control border-2 px-2 py-1 text-[11px] font-bold ${
+                          checked
+                            ? "border-ink bg-primary text-white"
+                            : "border-line bg-surface text-ink-soft"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

@@ -1,5 +1,6 @@
 import { formatDateTime, rupiah } from "./format";
 import { normalizePhone } from "./search";
+import { getCachedStoreName } from "./settings";
 import type { Transaction, TransactionItem } from "./types";
 
 const METHOD_LABELS: Record<string, string> = {
@@ -9,7 +10,7 @@ const METHOD_LABELS: Record<string, string> = {
 export function buildReceiptText(
   transaction: Transaction,
   items: TransactionItem[],
-  storeName = "Toko Sari Kedelai",
+  storeName = getCachedStoreName(),
 ): string {
   const lines: string[] = [];
 

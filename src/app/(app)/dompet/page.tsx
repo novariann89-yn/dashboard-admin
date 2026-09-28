@@ -16,8 +16,9 @@ import {
   listExpenses,
 } from "@/lib/repos/expenses";
 import { getDb } from "@/lib/db";
-import { listVariantsWithProduct } from "@/lib/repos/products";
-import { formatTime, isTodayWib } from "@/lib/format";
+import { listVariantsWithProduct, profitPerUnit } from "@/lib/repos/products";
+import { listExpensePresets } from "@/lib/repos/expense-presets";
+import { isTodayWib } from "@/lib/format";
 
 export default function DompetPage() {
   const toast = useToast();
@@ -25,6 +26,7 @@ export default function DompetPage() {
   const items = useLiveQuery(() => getDb().transactionItems.toArray(), [], []);
   const expenses = useLiveQuery(() => listExpenses(200), [], []);
   const variants = useLiveQuery(() => listVariantsWithProduct(false), [], []);
+  const presets = useLiveQuery(() => listExpensePresets(), [], []);
 
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
@@ -50,7 +52,7 @@ export default function DompetPage() {
     const existing = productSales.get(key) ?? { qty: 0, revenue: 0, profit: 0, items: [] };
     existing.qty += item.qty;
     existing.revenue += item.unitPrice * item.qty;
-    existing.profit += (item.unitPrice - item.unitCost) * item.qty;
+    existing.profit += profitPerUnit(item) * item.qty;
     if (!existing.items.includes(key)) existing.items.push(key);
     productSales.set(key, existing);
   }
@@ -58,7 +60,7 @@ export default function DompetPage() {
   const totalOmzet = todayTransactions.reduce((sum, t) => sum + t.finalTotal, 0);
   const totalProfit = Array.from(productSales.values()).reduce((sum, p) => sum + p.profit, 0);
   const totalPengeluaran = todayExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const hasilBersih = totalOmzet - totalPengeluaran;
+  const hasilBersih = totalProfit - totalPengeluaran;
 
   async function handleSaveExpense() {
     try {
@@ -135,18 +137,23 @@ export default function DompetPage() {
       <section className={cardClass}>
         <h2 className={sectionLabelClass}>Pengeluaran Hari Ini</h2>
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {["Bahan Baku", "Sewa Lapak", "Transport", "Kemasan", "Es Batu", "Gaji", "Listrik", "Lain-lain"].map((item) => (
+          {presets.length === 0 && (
+            <p className="text-[11px] text-ink-soft">
+              Belum ada kategori. Atur di Setting.
+            </p>
+          )}
+          {presets.map((preset) => (
             <button
-              key={item}
+              key={preset.id}
               type="button"
-              onClick={() => setCategory(item)}
+              onClick={() => setCategory(preset.name)}
               className={`rounded-control border-2 px-2 py-1.5 text-[11px] font-bold ${
-                category === item
+                category === preset.name
                   ? "border-ink bg-primary text-white"
                   : "border-line bg-surface text-ink-soft"
               }`}
             >
-              {item}
+              {preset.name}
             </button>
           ))}
         </div>
