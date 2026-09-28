@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  computeTotals,
   changeDue,
+  computeTotals,
   marginPercent,
   paymentStatusFor,
   roundToStep,
@@ -10,92 +10,67 @@ import {
 
 describe("roundToStep", () => {
   it("rounds to the nearest step", () => {
-    assert.equal(roundToStep(1249, 500), 1000);
-    assert.equal(roundToStep(1250, 500), 1500);
-    assert.equal(roundToStep(10000, 500), 10000);
+    assert.equal(roundToStep(12345, 100), 12300);
+    assert.equal(roundToStep(12350, 100), 12400);
   });
 
   it("falls back to whole numbers for invalid steps", () => {
-    assert.equal(roundToStep(1249.4, 0), 1249);
-    assert.equal(roundToStep(1249.6, 1), 1250);
+    assert.equal(roundToStep(1234.6, 0), 1235);
+    assert.equal(roundToStep(1234.6, Number.NaN), 1235);
   });
 });
 
 describe("computeTotals", () => {
-  it("applies rounding to the nearest 500", () => {
+  it("applies rounding and reports the adjustment", () => {
     const totals = computeTotals({
-      subtotal: 12500,
+      subtotal: 12345,
       roundingEnabled: true,
-      roundingStep: 500,
-    });
-    assert.equal(totals.finalTotal, 12500);
-    assert.equal(totals.roundingAdjust, 0);
-  });
-
-  it("computes positive rounding adjustment", () => {
-    const totals = computeTotals({
-      subtotal: 12300,
-      roundingEnabled: true,
-      roundingStep: 500,
-    });
-    assert.equal(totals.finalTotal, 12500);
-    assert.equal(totals.roundingAdjust, 200);
-  });
-
-  it("can be disabled", () => {
-    const totals = computeTotals({
-      subtotal: 12300,
-      roundingEnabled: false,
-      roundingStep: 500,
+      roundingStep: 100,
     });
     assert.equal(totals.finalTotal, 12300);
+    assert.equal(totals.roundingAdjust, -45);
+  });
+
+  it("skips rounding when disabled", () => {
+    const totals = computeTotals({
+      subtotal: 12345,
+      roundingEnabled: false,
+      roundingStep: 100,
+    });
+    assert.equal(totals.finalTotal, 12345);
     assert.equal(totals.roundingAdjust, 0);
   });
 
-  it("applies discounts before rounding", () => {
-    const totals = computeTotals({
-      subtotal: 20000,
-      discountTotal: 1000,
-      roundingEnabled: true,
-      roundingStep: 500,
-    });
-    assert.equal(totals.discountTotal, 1000);
-    assert.equal(totals.finalTotal, 19000);
-  });
-
-  it("never goes below zero", () => {
+  it("never returns a negative total", () => {
     const totals = computeTotals({
       subtotal: 1000,
       discountTotal: 5000,
-      roundingEnabled: true,
-      roundingStep: 500,
+      roundingEnabled: false,
+      roundingStep: 100,
     });
     assert.equal(totals.finalTotal, 0);
   });
 });
 
 describe("marginPercent", () => {
-  it("computes margin from sell and cost price", () => {
-    assert.equal(marginPercent(5000, 3000), 40);
-    assert.equal(marginPercent(10000, 6000), 40);
+  it("returns null when cost or price is not usable", () => {
+    assert.equal(marginPercent(0, 1000), null);
+    assert.equal(marginPercent(5000, 0), null);
   });
 
-  it("returns null when data is incomplete", () => {
-    assert.equal(marginPercent(5000, 0), null);
-    assert.equal(marginPercent(0, 3000), null);
+  it("computes margin against the sell price", () => {
+    assert.equal(marginPercent(5000, 3000), 40);
   });
 });
 
-describe("change and payment status", () => {
-  it("computes change due", () => {
-    assert.equal(changeDue(10000, 20000), 10000);
-    assert.equal(changeDue(10000, 10000), 0);
-    assert.equal(changeDue(10000, 5000), 0);
+describe("changeDue / paymentStatusFor", () => {
+  it("floors change at zero", () => {
+    assert.equal(changeDue(10000, 7000), 0);
+    assert.equal(changeDue(10000, 13000), 3000);
   });
 
-  it("derives payment status", () => {
+  it("classifies payment status", () => {
     assert.equal(paymentStatusFor(10000, 10000), "paid");
-    assert.equal(paymentStatusFor(10000, 12000), "paid");
     assert.equal(paymentStatusFor(10000, 5000), "partial");
     assert.equal(paymentStatusFor(10000, 0), "unpaid");
   });

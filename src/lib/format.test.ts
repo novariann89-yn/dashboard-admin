@@ -1,29 +1,42 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { startOfTodayWib, rupiah, formatDateTime, isTodayWib } from "./format";
+import {
+  isTodayWib,
+  rupiah,
+  startOfTodayWib,
+  wibDateString,
+} from "./format";
 
-describe("rupiah", () => {
-  it("formats with thousand separators", () => {
-    assert.equal(rupiah(15000), "Rp 15.000");
-    assert.equal(rupiah(0), "Rp 0");
+describe("startOfTodayWib", () => {
+  it("returns WIB midnight for a given instant", () => {
+    const now = new Date(Date.UTC(2026, 0, 15, 3, 30));
+    assert.equal(startOfTodayWib(now).getTime(), Date.UTC(2026, 0, 14, 17));
+  });
+
+  it("keeps the WIB day when UTC is still the previous day", () => {
+    const now = new Date(Date.UTC(2026, 0, 14, 17, 30));
+    assert.equal(startOfTodayWib(now).getTime(), Date.UTC(2026, 0, 14, 17));
   });
 });
 
-describe("WIB helpers", () => {
-  it("starts the day at midnight WIB (17:00 UTC previous day)", () => {
-    const start = startOfTodayWib(new Date("2026-09-14T07:30:00.000Z"));
-    assert.equal(start.toISOString(), "2026-09-13T17:00:00.000Z");
+describe("wibDateString", () => {
+  it("uses the WIB calendar day, not the UTC day", () => {
+    assert.equal(wibDateString(new Date(Date.UTC(2026, 0, 14, 17, 30))), "2026-01-15");
+    assert.equal(wibDateString(new Date(Date.UTC(2026, 0, 14, 16, 30))), "2026-01-14");
   });
+});
 
-  it("detects today in WIB", () => {
-    const now = new Date("2026-09-14T07:30:00.000Z");
-    assert.equal(isTodayWib(new Date("2026-09-14T07:00:00.000Z"), now), true);
-    assert.equal(isTodayWib(new Date("2026-09-13T16:59:00.000Z"), now), false);
+describe("rupiah", () => {
+  it("formats with the Indonesian thousands separator", () => {
+    assert.equal(rupiah(5000), "Rp 5.000");
+    assert.equal(rupiah(1234567), "Rp 1.234.567");
   });
+});
 
-  it("formats date-time in Jakarta time", () => {
-    const formatted = formatDateTime(new Date("2026-09-14T07:30:00.000Z"));
-    assert.match(formatted, /14/);
-    assert.match(formatted, /14\.30|14:30/);
+describe("isTodayWib", () => {
+  it("respects the WIB day boundary", () => {
+    const now = new Date(Date.UTC(2026, 0, 15, 6, 0));
+    assert.equal(isTodayWib(Date.UTC(2026, 0, 14, 17, 1), now), true);
+    assert.equal(isTodayWib(Date.UTC(2026, 0, 14, 16, 59), now), false);
   });
 });

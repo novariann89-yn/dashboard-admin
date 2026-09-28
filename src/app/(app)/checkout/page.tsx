@@ -11,7 +11,7 @@ import { listCustomers } from "@/lib/repos/customers";
 import { searchCustomers } from "@/lib/search";
 import { rupiah } from "@/lib/format";
 import { createTransaction, getTransactionItems } from "@/lib/repos/transactions";
-import type { TransactionItem } from "@/lib/types";
+import type { Transaction, TransactionItem } from "@/lib/types";
 import { buildReceiptText, whatsappUrl } from "@/lib/receipt";
 import { useCart } from "@/components/cart-context";
 import { useDebouncedValue } from "@/lib/use-debounced";
@@ -26,7 +26,7 @@ export default function CheckoutPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   const [receivedAmount, setReceivedAmount] = useState("");
   const [showReceipt, setShowReceipt] = useState(false);
-  const [lastTransaction, setLastTransaction] = useState<any>(null);
+  const [lastTransaction, setLastTransaction] = useState<Transaction | null>(null);
   const [lastTransactionItems, setLastTransactionItems] = useState<TransactionItem[]>([]);
 
   const debouncedQuery = useDebouncedValue(searchQuery, 150);
