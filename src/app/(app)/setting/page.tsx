@@ -21,13 +21,7 @@ import {
   listExpensePresets,
   updateExpensePreset,
 } from "@/lib/repos/expense-presets";
-import {
-  createUser,
-  deleteUser,
-  getSession,
-  requireRole,
-  updateUser,
-} from "@/lib/auth";
+import { createUser, deleteUser, getSession, updateUser } from "@/lib/auth";
 import { downloadBackup, importBackup } from "@/lib/backup";
 import { marginPercent } from "@/lib/pricing";
 import { formatDateTime } from "@/lib/format";
@@ -825,8 +819,9 @@ function AccountsSection() {
   const [role, setRole] = useState<"owner" | "admin">("admin");
 
   useEffect(() => {
-    setIsOwner(requireRole("owner"));
-    setCurrentId(getSession()?.userId ?? null);
+    const session = getSession();
+    setIsOwner(session?.role === "owner");
+    setCurrentId(session?.userId ?? null);
   }, []);
 
   async function run(action: () => Promise<void>, success: string) {
