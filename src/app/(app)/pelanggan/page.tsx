@@ -18,7 +18,7 @@ import {
   listCustomers,
   updateCustomer,
 } from "@/lib/repos/customers";
-import { listVariantsWithProduct } from "@/lib/repos/products";
+import { listVariantsWithProduct, profitPerUnit } from "@/lib/repos/products";
 import { formatPhone, searchCustomers } from "@/lib/search";
 import { useDebouncedValue } from "@/lib/use-debounced";
 import type { BuyerType, Customer, Transaction } from "@/lib/types";
@@ -200,7 +200,7 @@ export default function PelangganPage() {
                     </span>
                     <span className="text-right text-xs text-ink-soft">
                       <span className={badgeClass}>
-                        {stats?.bottles ?? 0} botol
+                        {stats?.bottles ?? 0} pcs
                       </span>
                       <span className="mt-1 block tabular-nums">
                         {rupiah(stats?.spend ?? 0)} · {stats?.count ?? 0}x
@@ -232,6 +232,7 @@ type ItemRow = {
   qty: number;
   unitPrice: number;
   unitCost: number;
+  netProfitSnapshot: number;
 };
 
 function CustomerDetail({
@@ -264,7 +265,7 @@ function CustomerDetail({
   const totalBottles = ownItems.reduce((sum, item) => sum + item.qty, 0);
   const totalSpend = own.reduce((sum, transaction) => sum + transaction.finalTotal, 0);
   const totalProfit = ownItems.reduce(
-    (sum, item) => sum + (item.unitPrice - item.unitCost) * item.qty,
+    (sum, item) => sum + profitPerUnit(item) * item.qty,
     0,
   );
 
@@ -286,7 +287,7 @@ function CustomerDetail({
       <div className="grid grid-cols-3 gap-2">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
-            Botol
+            Jumlah
           </p>
           <p className="text-lg font-extrabold tabular-nums">{totalBottles}</p>
         </div>
@@ -313,7 +314,7 @@ function CustomerDetail({
             return (
               <li key={variantId} className="text-xs text-ink-soft">
                 {variant ? `${variant.productName} ${variant.sizeName}` : "?"}:{" "}
-                <span className="font-bold tabular-nums">{qty} botol</span>
+                <span className="font-bold tabular-nums">{qty} pcs</span>
               </li>
             );
           })}

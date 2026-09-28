@@ -1,6 +1,7 @@
 import { getDb } from "./db";
 import { randomSalt, hashPin } from "./pin";
 import { createProduct, createVariant } from "./repos/products";
+import { ensureExpensePresetsSeeded } from "./repos/expense-presets";
 import { updateSettings } from "./settings";
 import { newId } from "./id";
 
@@ -9,6 +10,7 @@ export const DEFAULT_OWNER_PASSWORD = "1234";
 
 export async function ensureSeeded(): Promise<void> {
   const db = getDb();
+  await ensureExpensePresetsSeeded();
   const productCount = await db.products.count();
   if (productCount > 0) return;
 
