@@ -33,7 +33,7 @@ export function BottomNav() {
               aria-current={active ? "page" : undefined}
               className={`flex flex-col items-center gap-0.5 rounded-control border-2 px-1 py-1.5 text-[10px] font-bold ${
                 active
-                  ? "border-ink bg-soy text-ink"
+                  ? "border-ink bg-primary text-white"
                   : "border-transparent text-ink-soft"
               }`}
             >

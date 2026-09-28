@@ -24,7 +24,7 @@ export interface CreateTransactionResult {
   marginWarning: boolean;
 }
 
-async function createTransaction(
+export async function createTransaction(
   input: CreateTransactionInput,
 ): Promise<CreateTransactionResult> {
   const db = getDb();
@@ -59,6 +59,7 @@ async function createTransaction(
       qty: Math.floor(item.qty),
       unitPrice: variant.sellPrice,
       unitCost: variant.costPrice,
+      netProfitPerUnit: variant.netProfitPerUnit,
     };
   });
 
@@ -99,6 +100,7 @@ async function createTransaction(
     qty: line.qty,
     unitPrice: line.unitPrice,
     unitCost: line.unitCost,
+    netProfitSnapshot: line.netProfitPerUnit,
   }));
 
   const movements: StockMovement[] = prepared.map((line) => ({

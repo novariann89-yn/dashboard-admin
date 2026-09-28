@@ -68,6 +68,7 @@ export async function createVariant(input: {
   sizeName: string;
   sellPrice: number;
   costPrice: number;
+  netProfitPerUnit?: number;
   sortOrder?: number;
 }): Promise<ProductVariant> {
   const db = getDb();
@@ -78,6 +79,7 @@ export async function createVariant(input: {
     sizeName: input.sizeName.trim(),
     sellPrice: Math.max(0, Math.round(input.sellPrice)),
     costPrice: Math.max(0, Math.round(input.costPrice)),
+    netProfitPerUnit: Math.max(0, Math.round(input.netProfitPerUnit ?? 0)),
     stock: 0,
     active: true,
     sortOrder: input.sortOrder ?? existing + 1,
@@ -92,7 +94,7 @@ export async function updateVariant(
   patch: Partial<
     Pick<
       ProductVariant,
-      "sizeName" | "sellPrice" | "costPrice" | "active" | "sortOrder"
+      "sizeName" | "sellPrice" | "costPrice" | "netProfitPerUnit" | "active" | "sortOrder"
     >
   >,
 ): Promise<void> {
@@ -104,6 +106,7 @@ export async function updateVariant(
     ...patch,
     sellPrice: patch.sellPrice !== undefined ? Math.max(0, Math.round(patch.sellPrice)) : undefined,
     costPrice: patch.costPrice !== undefined ? Math.max(0, Math.round(patch.costPrice)) : undefined,
+    netProfitPerUnit: patch.netProfitPerUnit !== undefined ? Math.max(0, Math.round(patch.netProfitPerUnit)) : undefined,
   };
 
   const priceChanged =

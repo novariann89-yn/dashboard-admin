@@ -26,7 +26,8 @@ import {
   updateProduct,
   updateVariant,
 } from "@/lib/repos/products";
-import { getSettings, updateSettings } from "@/lib/settings";
+import { getSettings, updateSettings, type ThemeMode } from "@/lib/settings";
+import { applyTheme, readCachedTheme, syncThemeClass } from "@/lib/theme";
 import type { Product, ProductVariant } from "@/lib/types";
 
 export default function SettingPage() {
@@ -68,6 +69,11 @@ export default function SettingPage() {
           ))}
         </div>
       </section>
+
+      <AppearanceSection
+        theme={settings?.theme ?? "system"}
+        loaded={settings !== null}
+      />
 
       <RoundingSection
         enabled={settings?.roundingEnabled ?? true}
@@ -236,7 +242,7 @@ function ProductBlock({
   const [showVariantForm, setShowVariantForm] = useState(false);
 
   return (
-    <div className="rounded-control border-2 border-line bg-white p-3">
+    <div className="rounded-control border-2 border-line bg-surface p-3">
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-sm font-extrabold">{product.name}</p>
@@ -352,7 +358,7 @@ function VariantEditor({ variant }: { variant: ProductVariant }) {
         <input
           value={sizeName}
           onChange={(event) => setSizeName(event.target.value)}
-          className="w-full rounded-control border border-line bg-white px-2 py-1.5 text-xs font-bold"
+          className="w-full rounded-control border border-line bg-surface px-2 py-1.5 text-xs font-bold"
         />
         <button
           type="button"
@@ -374,7 +380,7 @@ function VariantEditor({ variant }: { variant: ProductVariant }) {
       <div className="mt-2 flex items-center justify-between">
         <span
           className={`text-[11px] font-bold tabular-nums ${
-            marginWarning ? "text-brick" : "text-pandan"
+            marginWarning ? "text-error" : "text-success"
           }`}
         >
           {costPrice <= 0
@@ -384,7 +390,7 @@ function VariantEditor({ variant }: { variant: ProductVariant }) {
         <button
           type="button"
           onClick={save}
-          className="rounded-control border-2 border-ink bg-soy px-3 py-1 text-[11px] font-bold"
+          className="rounded-control border-2 border-ink bg-primary px-3 py-1 text-[11px] font-bold text-white"
         >
           Simpan varian
         </button>
@@ -421,11 +427,76 @@ function NumberField({
         onChange={(event) => onChange(Number(event.target.value) || 0)}
         inputMode="numeric"
         placeholder="0"
-        className={`w-full rounded-control border-2 border-line bg-white px-2 py-1.5 text-right tabular-nums ${
+        className={`w-full rounded-control border-2 border-line bg-surface px-2 py-1.5 text-right tabular-nums ${
           small ? "text-xs" : "text-sm"
         }`}
       />
     </label>
+  );
+}
+
+const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
+  { value: "light", label: "Terang" },
+  { value: "dark", label: "Gelap" },
+  { value: "system", label: "Sistem" },
+];
+
+function AppearanceSection({
+  theme,
+  loaded,
+}: {
+  theme: ThemeMode;
+  loaded: boolean;
+}) {
+  const toast = useToast();
+  const [selected, setSelected] = useState<ThemeMode>(theme);
+
+  useEffect(() => {
+    if (!loaded) return;
+    setSelected(theme);
+    syncThemeClass(theme);
+  }, [loaded, theme]);
+
+  useEffect(() => {
+    setSelected(readCachedTheme());
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => {
+      if (readCachedTheme() === "system") syncThemeClass("system");
+    };
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  async function choose(next: ThemeMode) {
+    setSelected(next);
+    applyTheme(next);
+    await updateSettings({ theme: next });
+    toast("Tampilan diperbarui");
+  }
+
+  return (
+    <section className={cardClass}>
+      <h2 className={sectionLabelClass}>Tampilan</h2>
+      <p className="mt-1 text-xs text-ink-soft">
+        Pilih mode warna. &quot;Sistem&quot; mengikuti pengaturan HP.
+      </p>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {THEME_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => choose(option.value)}
+            className={`rounded-control border-2 py-2 text-sm font-bold transition ${
+              selected === option.value
+                ? "border-ink bg-primary text-white shadow-card"
+                : "border-line bg-surface text-ink-soft"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -456,12 +527,12 @@ function RoundingSection({
         receh.
       </p>
       <div className="mt-3 flex flex-col gap-3">
-        <label className="flex items-center gap-3 rounded-control border-2 border-line bg-white p-2.5 text-sm font-bold">
+        <label className="flex items-center gap-3 rounded-control border-2 border-line bg-surface p-2.5 text-sm font-bold">
           <input
             type="checkbox"
             checked={roundingEnabled}
             onChange={(event) => setRoundingEnabled(event.target.checked)}
-            className="h-5 w-5 accent-soy-dark"
+            className="h-5 w-5 accent-primary"
           />
           Aktifkan pembulatan
         </label>

@@ -22,8 +22,11 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#241d15",
+  themeColor: "#f0f4f8",
+  colorScheme: "light dark",
 };
+
+const applyThemeScript = `(function(){try{var m=localStorage.getItem("themeMode")||"system";var d=m==="dark"||(m==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d)document.documentElement.classList.add("dark")}catch(e){}})();`;
 
 export default function RootLayout({
   children,
@@ -31,7 +34,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="id" className={jakarta.variable}>
+    <html lang="id" className={jakarta.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: applyThemeScript }} />
+      </head>
       <body className="bg-canvas font-sans text-ink antialiased">
         <PwaRegister />
         {children}

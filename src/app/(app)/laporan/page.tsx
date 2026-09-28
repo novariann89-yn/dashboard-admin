@@ -11,29 +11,19 @@ import {
 } from "@/components/ui";
 import { downloadCsv } from "@/lib/csv";
 import { getDb } from "@/lib/db";
-import {
-  byProduct,
-  byBuyerType,
-  resolvePeriod,
-  summarize,
-} from "@/lib/finance";
+import { resolvePeriod } from "@/lib/finance";
 import { formatDateTime, rupiah } from "@/lib/format";
-import { listVariantsWithProduct } from "@/lib/repos/products";
 
 export default function LaporanPage() {
   const transactions = useLiveQuery(() => getDb().transactions.toArray(), [], []);
   const items = useLiveQuery(() => getDb().transactionItems.toArray(), [], []);
   const expenses = useLiveQuery(() => getDb().expenses.toArray(), [], []);
-  const variants = useLiveQuery(() => listVariantsWithProduct(false), [], []);
 
   const [periodValue, setPeriodValue] = useState<PeriodValue>({
     preset: "today",
   });
 
   const period = resolvePeriod(periodValue.preset, periodValue.day);
-  const input = { transactions, items, expenses, period };
-  const summary = summarize(input);
-  const products = byProduct({ ...input, period });
 
   const periodTransactions = transactions
     .filter(
@@ -44,148 +34,92 @@ export default function LaporanPage() {
     )
     .sort((a, b) => b.occurredAt - a.occurredAt);
 
-  function exportSummary() {
-    downloadCsv(`laporan-ringkasan-${period.label}.csv`, [
-      ["Laporan keuangan", period.label],
-      ["Omzet (kotor)", summary.grossSales],
-      ["Penjualan bersih", summary.netSales],
-      ["Pembulatan", summary.rounding],
-      ["Laba kotor", summary.grossProfit],
-      ["Hasil bersih", summary.netProfit],
-      ["Margin (%)", summary.marginPercent === null ? "" : summary.marginPercent.toFixed(1)],
-      ["Jumlah transaksi", summary.transactionCount],
-    ]);
-  }
-
-  function exportProducts() {
-    downloadCsv(`laporan-produk-${period.label}.csv`, [
-      ["Produk", "Terjual", "Omzet", "Laba"],
-      ...products.map((row) => [
-        row.label,
-        row.qtySold,
-        row.revenue,
-        row.profit,
-      ]),
-    ]);
+  function exportHistoris() {
+    ;(async () => {
+      const rows: string[][] = [["Tanggal", "Transaksi", "Pelanggan", "Produk", "Jumlah", "Total", "Bayar"]];
+      for (const transaction of periodTransactions) {
+        const transactionItems = await getDb()
+          .transactionItems
+          .where("transactionId")
+          .equals(transaction.id)
+          .toArray();
+        const productNames = transactionItems
+          .map((item) => `${item.productName} ${item.sizeName}`)
+          .join(", ");
+        const totalQty = transactionItems.reduce(
+          (sum, item) => sum + item.qty,
+          0,
+        );
+        rows.push([
+          formatDateTime(transaction.occurredAt),
+          transaction.id.slice(0, 8),
+          transaction.customerName ?? "Umum",
+          productNames,
+          String(totalQty),
+          rupiah(transaction.finalTotal),
+          transaction.paymentMethod,
+        ]);
+      }
+      downloadCsv(`historis-${period.label}.csv`, rows);
+    })();
   }
 
   return (
     <div className="flex flex-col gap-5">
       <div className="no-print flex flex-col gap-3">
-        <h1 className="text-xl font-extrabold tracking-tight">Laporan</h1>
+        <h1 className="text-xl font-extrabold tracking-tight">Histori</h1>
         <PeriodPicker value={periodValue} onChange={setPeriodValue} />
       </div>
 
       <section className={cardClass}>
-        <h2 className={sectionLabelClass}>Ringkasan · {period.label}</h2>
-        <dl className="mt-3 flex flex-col gap-1.5 text-sm">
-          <div className="flex items-center justify-between">
-            <dt className="text-ink-soft">Omzet (kotor)</dt>
-            <dd className="font-bold tabular-nums">{rupiah(summary.grossSales)}</dd>
-          </div>
-          <div className="flex items-center justify-between">
-            <dt className="text-ink-soft">Penjualan bersih</dt>
-            <dd className="font-bold tabular-nums text-pingan">{rupiah(summary.netSales)}</dd>
-          </div>
-          <div className="flex items-center justify-between">
-            <dt className="text-ink-soft">Laba kotor</dt>
-            <dd className="font-bold tabular-nums text-pingan">{rupiah(summary.grossProfit)}</dd>
-          </div>
-          <div className="flex items-center justify-between">
-            <dt className="text-ink-soft">Hasil bersih</dt>
-            <dd className="font-bold tabular-nums text-pingan">{rupiah(summary.netProfit)}</dd>
-          </div>
-        </dl>
-        <p className="mt-2 text-right text-xs font-bold text-ink-soft">
-          Margin:{" "}
-          {summary.marginPercent === null
-            ? "-"
-            : `${summary.marginPercent.toFixed(1)}%`}
-        </p>
-        <button
-          type="button"
-          onClick={exportSummary}
-          className={`${secondaryButtonClass} no-print mt-3 w-full`}
-        >
-          Unduh CSV ringkasan
-        </button>
-      </section>
-
-      <section className={cardClass}>
-        <div className="flex items-center justify-between">
-          <h2 className={sectionLabelClass}>Per produk</h2>
-          <button
-            type="button"
-            onClick={exportProducts}
-            className="no-print text-xs font-bold text-ink-soft underline"
-          >
-            CSV
-          </button>
-        </div>
-        {products.length === 0 ? (
-          <p className="mt-2 text-sm text-ink-soft">Belum ada penjualan.</p>
+        <h2 className={sectionLabelClass}>Riwayat Transaksi · {period.label}</h2>
+        {periodTransactions.length === 0 ? (
+          <p className="mt-2 text-sm text-ink-soft">Belum ada transaksi.</p>
         ) : (
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-[10px] uppercase tracking-wider text-ink-soft">
-                  <th className="py-1">Produk</th>
-                  <th className="py-1 text-right">Terjual</th>
-                  <th className="py-1 text-right">Omzet</th>
-                  <th className="py-1 text-right">Laba</th>
-                </tr>
-              </thead>
-              <tbody className="tabular-nums">
-                {products.map((row) => (
-                  <tr key={row.label} className="border-t border-line">
-                    <td className="py-1.5 pr-1 font-bold">{row.label}</td>
-                    <td className="py-1.5 text-right">{row.qtySold}</td>
-                    <td className="py-1.5 text-right">{row.revenue}</td>
-                    <td className="py-1.5 text-right font-bold">{row.profit}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul className="mt-1 flex flex-col divide-y divide-line">
+            {periodTransactions.map((transaction) => (
+              <li key={transaction.id} className="flex items-center justify-between py-2.5">
+                <span className="text-sm">
+                  <span className="font-bold">
+                    {formatDateTime(transaction.occurredAt)}
+                  </span>
+                  <span className="block text-xs tabular-nums text-ink-soft">
+                    {transaction.paymentMethod === "cash"
+                      ? "Tunai"
+                      : transaction.paymentMethod === "qris"
+                        ? "QRIS"
+                        : "Transfer"}
+                  </span>
+                </span>
+                <span className="text-right">
+                  <span className="block font-bold tabular-nums">
+                    {rupiah(transaction.finalTotal)}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
       <section className={cardClass}>
         <div className="flex items-center justify-between">
-          <h2 className={sectionLabelClass}>CSV Export</h2>
+          <h2 className={sectionLabelClass}>Export</h2>
           <button
             type="button"
-            onClick={exportProducts}
-            className="no-print text-xs font-bold text-ink-soft underline"
+            onClick={exportHistoris}
+            className={`${secondaryButtonClass} no-print mt-2 w-full`}
           >
-            Produk
+            Export CSV
           </button>
         </div>
-        {products.length === 0 ? (
+        {periodTransactions.length === 0 ? (
           <p className="mt-2 text-sm text-ink-soft">Belum ada data.</p>
         ) : (
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-[10px] uppercase tracking-wider text-ink-soft">
-                  <th className="py-1">Produk</th>
-                  <th className="py-1 text-right">Terjual</th>
-                  <th className="py-1 text-right">Omzet</th>
-                  <th className="py-1 text-right">Laba</th>
-                </tr>
-              </thead>
-              <tbody className="tabular-nums">
-                {products.map((row) => (
-                  <tr key={row.label} className="border-t border-line">
-                    <td className="py-1.5 pr-1 font-bold">{row.label}</td>
-                    <td className="py-1.5 text-right">{row.qtySold}</td>
-                    <td className="py-1.5 text-right">{row.revenue}</td>
-                    <td className="py-1.5 text-right font-bold">{row.profit}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <p className="mt-1 text-[10px] text-ink-soft">
+            CSV memakai pemisah titik-koma agar rapi di Excel. Untuk cetak: pilih
+            "Cetak / Simpan PDF" di dialog cetak.
+          </p>
         )}
       </section>
 
@@ -198,8 +132,8 @@ export default function LaporanPage() {
       </button>
 
       <p className="no-print text-xs text-ink-soft">
-        CSV memakai pemisah titik-koma agar rapi di Excel. Untuk PDF: pilih
-        "Simpan sebagai PDF" di dialog cetak.
+        Data historis tetap tersimpan meskipun hari telah berganti. Gunakan filter
+        periode di atas untuk melihat transaksi lama.
       </p>
     </div>
   );

@@ -1,3 +1,5 @@
+Before any coding task, load the `lean-coding` skill. Keep answers terse.
+
 # AGENTS.md — Dashboard Admin (v2, offline-first)
 
 Admin/POS dashboard for a bottled soy milk stall. **All data lives on the phone**

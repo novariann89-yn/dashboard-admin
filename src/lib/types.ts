@@ -2,6 +2,19 @@ export type ID = string;
 
 export type BuyerType = "umum" | "member";
 
+export type UserRole = "owner" | "admin";
+
+export interface User {
+  id: ID;
+  username: string;
+  passwordHash: string;
+  passwordSalt: string;
+  role: UserRole;
+  permissions: string[];
+  active: boolean;
+  createdAt: number;
+}
+
 export interface Product {
   id: ID;
   name: string;
@@ -17,6 +30,7 @@ export interface ProductVariant {
   sizeName: string;
   sellPrice: number;
   costPrice: number;
+  netProfitPerUnit: number;
   stock: number;
   active: boolean;
   sortOrder: number;
@@ -55,6 +69,7 @@ export interface TransactionItem {
   qty: number;
   unitPrice: number;
   unitCost: number;
+  netProfitSnapshot: number;
 }
 
 export interface Expense {
@@ -63,6 +78,14 @@ export interface Expense {
   category: string;
   amount: number;
   note: string | null;
+}
+
+export interface ExpensePreset {
+  id: ID;
+  name: string;
+  sortOrder: number;
+  active: boolean;
+  createdAt: number;
 }
 
 export interface AuditLog {
@@ -79,7 +102,7 @@ export interface StockMovement {
   id: ID;
   variantId: ID;
   occurredAt: number;
-  type: "sale" | "bonus" | "sale" | "cancel";
+  type: "sale" | "bonus" | "cancel";
   qty: number;
   refTransactionId: ID | null;
   note: string | null;

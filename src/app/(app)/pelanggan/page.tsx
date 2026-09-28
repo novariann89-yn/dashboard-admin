@@ -118,7 +118,7 @@ export default function PelangganPage() {
             }}
             className={`rounded-control border-2 py-2 text-sm font-bold ${
               tab === type
-                ? "border-ink bg-soy"
+                ? "border-ink bg-primary text-white"
                 : "border-line bg-surface text-ink-soft"
             }`}
           >
@@ -332,12 +332,12 @@ function CustomerDetail({
           inputMode="tel"
           className={inputClass}
         />
-        <label className="flex items-center gap-3 rounded-control border-2 border-line bg-white p-2.5 text-sm font-bold">
+        <label className="flex items-center gap-3 rounded-control border-2 border-line bg-surface p-2.5 text-sm font-bold">
           <input
             type="checkbox"
             checked={active}
             onChange={(event) => setActive(event.target.checked)}
-            className="h-5 w-5 accent-soy-dark"
+            className="h-5 w-5 accent-primary"
           />
           Pelanggan aktif
         </label>

@@ -26,9 +26,9 @@ export function useToast() {
 }
 
 const toneClass: Record<Tone, string> = {
-  success: "border-pandan/50 bg-pandan text-cream",
-  error: "border-ink bg-brick text-cream",
-  info: "border-ink bg-ink text-cream",
+  success: "border-success/50 bg-success text-white",
+  error: "border-ink bg-error text-white",
+  info: "border-ink bg-ink text-surface",
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -54,7 +54,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`w-full rounded-control border-2 p-3 text-center text-sm font-bold shadow-hard-sm ${toneClass[toast.tone]}`}
+            className={`w-full rounded-control border-2 p-3 text-center text-sm font-bold shadow-card ${toneClass[toast.tone]}`}
           >
             {toast.message}
           </div>

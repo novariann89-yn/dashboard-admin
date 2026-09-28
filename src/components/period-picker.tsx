@@ -39,7 +39,7 @@ export function PeriodPicker({
             }
             className={`rounded-control border-2 py-1.5 text-[11px] font-bold ${
               value.preset === option.value
-                ? "border-ink bg-soy"
+                ? "border-ink bg-primary text-white"
                 : "border-line bg-surface text-ink-soft"
             }`}
           >

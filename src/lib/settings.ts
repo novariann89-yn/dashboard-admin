@@ -1,5 +1,7 @@
 import { getDb } from "./db";
 
+export type ThemeMode = "light" | "dark" | "system";
+
 export interface AppSettings {
   roundingEnabled: boolean;
   roundingStep: number;
@@ -8,6 +10,8 @@ export interface AppSettings {
   pinSalt: string | null;
   pinIsDefault: boolean;
   lastBackupAt: number;
+  storeName: string;
+  theme: ThemeMode;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -18,6 +22,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pinSalt: null,
   pinIsDefault: false,
   lastBackupAt: 0,
+  storeName: "Toko Mas Andik",
+  theme: "system",
 };
 
 export async function getSettings(): Promise<AppSettings> {
@@ -39,6 +45,8 @@ export async function getSettings(): Promise<AppSettings> {
     pinSalt: raw.pinSalt || null,
     pinIsDefault: raw.pinIsDefault ? raw.pinIsDefault === "true" : false,
     lastBackupAt: raw.lastBackupAt ? Number(raw.lastBackupAt) : 0,
+    storeName: raw.storeName || DEFAULT_SETTINGS.storeName,
+    theme: (raw.theme as ThemeMode) || DEFAULT_SETTINGS.theme,
   };
 }
 

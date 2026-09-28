@@ -56,13 +56,13 @@ export function FinanceChart({
             <polyline
               points={polyline("omzet")}
               fill="none"
-              stroke="var(--color-soy-dark)"
+              stroke="var(--color-primary)"
               strokeWidth="2"
             />
             <polyline
               points={polyline("laba")}
               fill="none"
-              stroke="var(--color-pandan)"
+              stroke="var(--color-success)"
               strokeWidth="2"
               strokeDasharray="4 3"
             />
@@ -74,13 +74,13 @@ export function FinanceChart({
               cx={x(index)}
               cy={y(point.omzet)}
               r="2.5"
-              fill="var(--color-soy-dark)"
+              fill="var(--color-primary)"
             />
             <circle
               cx={x(index)}
               cy={y(point.laba)}
               r="2.5"
-              fill="var(--color-pandan)"
+              fill="var(--color-success)"
             />
           </g>
         ))}
@@ -91,8 +91,8 @@ export function FinanceChart({
         <span>{data[data.length - 1]?.label}</span>
       </div>
       <div className="mt-1 flex flex-wrap gap-3 text-[10px] font-bold">
-        <span className="text-soy-dark">— Omzet · skala maks {rupiah(max)}</span>
-        <span className="text-pandan">-- Laba kotor</span>
+        <span className="text-primary">— Omzet · skala maks {rupiah(max)}</span>
+        <span className="text-success">-- Laba kotor</span>
       </div>
     </div>
   );
