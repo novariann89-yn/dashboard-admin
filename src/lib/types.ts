@@ -98,24 +98,6 @@ export interface AuditLog {
   newData: string | null;
 }
 
-export interface StockMovement {
-  id: ID;
-  variantId: ID;
-  occurredAt: number;
-  type: "sale" | "bonus" | "cancel";
-  qty: number;
-  refTransactionId: ID | null;
-  note: string | null;
-}
-
-export interface StockOpening {
-  id: ID;
-  date: string;
-  variantId: ID;
-  qty: number;
-  createdAt: number;
-}
-
 export interface Setting {
   key: string;
   value: string;

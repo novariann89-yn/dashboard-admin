@@ -4,7 +4,7 @@ import { newId } from "../id";
 import { computeTotals } from "../pricing";
 import { getSettings } from "../settings";
 import { logAudit } from "./audit";
-import type { BuyerType, Transaction, TransactionItem, StockMovement } from "../types";
+import type { BuyerType, Transaction, TransactionItem } from "../types";
 
 const CANCEL_WINDOW_MS = 15 * 60 * 1000;
 const ATTACH_WINDOW_MS = 3 * 60 * 1000;
@@ -101,16 +101,6 @@ export async function createTransaction(
     unitPrice: line.unitPrice,
     unitCost: line.unitCost,
     netProfitSnapshot: line.netProfitPerUnit,
-  }));
-
-  const movements: StockMovement[] = prepared.map((line) => ({
-    id: newId(),
-    variantId: line.variant.id,
-    occurredAt: now,
-    type: "sale" as const,
-    qty: -line.qty,
-    refTransactionId: transaction.id,
-    note: null,
   }));
 
   await db.transaction(

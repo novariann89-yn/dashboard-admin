@@ -1,12 +1,14 @@
 Before any coding task, load the `lean-coding` skill. Keep answers terse.
 
-# AGENTS.md — Dashboard Admin (v2, offline-first)
+# AGENTS.md — Dashboard Toko (offline-first, revisi 2)
 
-Admin/POS dashboard for a bottled soy milk stall. **All data lives on the phone**
-(IndexedDB via Dexie); the app is a static export (folder `out/`) and must run
-fully offline at the market. UI is in Indonesian. A 4-digit local PIN gates the UI.
+Admin/POS dashboard for a soy-milk snack stall (owner: Mas Andik). **All data
+lives on the phone** (IndexedDB via Dexie); the app is a static export (folder
+`out/`) and must run fully offline at the market. UI is in Indonesian. Access is
+gated by a local login (Owner/Admin roles).
 
-Remote: `git@github.com:novariann89-yn/dashboard-admin.git` (SSH auth as `novariann89-yn`).
+- Requirements source of truth: Obsidian `00 - Inbox/revisi mas andik 2 (ver revisi dari gpt).md`.
+- Beranda UI blueprint: Obsidian `Excalidraw/Drawing 2026-09-19 01.50.04.excalidraw.md`.
 
 ## Commands
 
@@ -27,94 +29,88 @@ After code changes, run `npm run restart` so the phone gets the update.
 
 - Next.js 16 App Router with `output: "export"` (static HTML/JS). No server actions,
   no API routes, no database server.
-- `src/lib/db.ts` — Dexie schema (version 2) for all tables. `getDb()` is lazy so
+- `src/lib/db.ts` — Dexie schema (version 1) for all tables. `getDb()` is lazy so
   nothing touches IndexedDB during SSR/prerender. `resetDbInstance()` exists for tests.
-- `src/lib/repos/*` — data access (`products`, `customers`, `transactions`, `stock`,
-  `stock-days`, `discounts`, `returns`, `expenses`, `cash`). Transaction creation is
-  atomic: it resolves tier prices, picks the best discount, writes snapshots, bonus
-  items and stock movements, and returns margin info.
-- `src/lib/discounts.ts` — pure discount engine: 4 effect types (percent, amount,
-  special price, bonus product), no stacking (best value for buyer wins), priority
-  tie-break, condition types (min bottles/amount, multiples). `src/lib/reseller.ts` —
-  flat tier pricing, MOQ, locked level, margin warning. Both heavily tested.
-- `src/lib/finance.ts` — pure reporting engine: `resolvePeriod` (WIB ranges),
-  `summarize` (full P&L), `byProduct`, `byBuyerType`, `dailySeries` for charts.
-  `src/lib/csv.ts` — CSV escaping + `downloadCsv` for report exports.
-  `src/lib/receipt.ts` — WhatsApp receipt text + `wa.me` URL builder.
-- `src/lib/pricing.ts` — pure math: rounding (default Rp 500), margins, change,
-  payment status. `src/lib/search.ts` — phone/name normalization + ranking with
-  fuzzy matching (Levenshtein ≤2, trigram ≥0.4). `src/lib/backup.ts` — JSON
-  export/import. `src/lib/pin.ts` — PIN hash (Web Crypto). `src/lib/seed.ts` —
-  first-run starter data (default PIN `1234`).
-- Offline/PWA: `public/sw.js` (app-shell cache, network-first navigation) registered
-  by `src/components/pwa-register.tsx` **only in secure contexts** (HTTPS/localhost),
-  so LAN HTTP keeps working.
-- `src/lib/repos/audit.ts` — audit log for cancels, price changes, manual stock and
-  expenses. `src/lib/use-debounced.ts` — 150 ms search debounce hook.
-- `src/app/(app)/*` — pages: `/` Beranda (financial report), `/beli` POS, `/pelanggan`,
-  `/piutang`, `/stok`, `/pengeluaran`, `/kasir`, `/laporan`, `/setting`.
-  `src/app/(app)/layout.tsx` is the client shell: ToastProvider → PinGate → header + nav.
-  Shared UI: `components/period-picker.tsx`, `components/line-chart.tsx` (inline SVG,
-  no chart dependency).
-- Styling: all colors/fonts/radii/shadows live in `src/app/globals.css` (`@theme`
-  tokens: `bg-canvas`, `text-ink`, `bg-soy`, `border-line`, …). Shared class
-  primitives in `src/components/ui.ts`; inline SVG icons in `src/components/icons.tsx`.
+  Tables: `products`, `productVariants`, `customers`, `transactions`,
+  `transactionItems`, `expenses`, `expensePresets`, `users`, `auditLog`, `settings`.
+- `src/lib/repos/*` — data access:
+  - `products` — products + variants (`sellPrice`, `costPrice`, `netProfitPerUnit`, `stock`).
+  - `transactions` — atomic sale: snapshots price/cost/profit, decrements stock.
+  - `stock` — `listStock`, `stockLevel`, `addStock` (increment), `setStock` (physical count), all audited.
+  - `customers`, `expenses`, `audit`.
+- `src/lib/auth.ts` — `login`/`logout`, session in `sessionStorage`, `hasPermission`,
+  `createUser`/`updateUser`/`deleteUser`/`changePassword`.
+  `src/lib/permissions.ts` — single source of truth: `PAGES`, `permissionForPath`,
+  `canAccess`, `visiblePages`.
+  `components/login-gate.tsx` gates the whole UI; `components/permission-gate.tsx`
+  guards each route (renders an "Akses ditolak" screen).
+- Sales flow (Beranda): `app/(app)/page.tsx` product grid → `components/product-detail-sheet.tsx`
+  (variant/size + qty, capped to stock) → `components/cart-context.tsx` (persists to
+  `localStorage`) → `components/cart-sheet.tsx` → `/checkout` → `createTransaction`.
+  A single `CartProvider` lives in `src/app/(app)/layout.tsx`.
+- Pages `src/app/(app)/*`: `/` Beranda, `/checkout`, `/pelanggan`, `/stok`,
+  `/dompet` (owner-only), `/laporan` (= Histori, owner-only via menu), `/setting` (owner-only).
+- Styling: colors/fonts/radii/shadows in `src/app/globals.css` (`@theme` tokens, minimal
+  blue, subtle dot/blob background, dark mode via `.dark`). Shared class primitives in
+  `src/components/ui.ts`; inline SVG icons in `src/components/icons.tsx`; theme helper
+  `src/lib/theme.ts`.
+- Offline/PWA: `public/sw.js` (app-shell cache `dashboard-admin-v2`, network-first
+  navigation) registered by `src/components/pwa-register.tsx` **only in secure contexts**
+  (HTTPS/localhost), so LAN HTTP keeps working. `src/app/manifest.ts` provides the manifest.
+- `src/lib/backup.ts` — JSON export/import across **all** Dexie tables; restore clears the
+  legacy PIN keys. `src/lib/format.ts`, `src/lib/id.ts`, `src/lib/csv.ts`, `src/lib/receipt.ts`,
+  `src/lib/pricing.ts` (rounding/margin/change) are pure helpers.
 - Tests use `fake-indexeddb/auto` (import it before any repo/db import) and
   `resetDbInstance()` between tests.
 
+## Roles & permissions
+
+- Owner: every page, including Dompet and Setting. Admin default: `beranda`, `pelanggan`, `stok`.
+- Permission keys: `beranda`, `pelanggan`, `stok`, `dompet`, `historis`, `setting`.
+  `dompet` and `setting` are `ownerOnly` in `permissions.ts`.
+- First-run seed (`src/lib/seed.ts`): product "Sari Kedelai", owner ID `owner`, sandi `1234`.
+  `ensureSeeded()` runs before the login screen.
+- `src/lib/pin.ts` (Web Crypto hash) is reused as the password hasher. `settings.pinHash`
+  and the Setting "Ganti PIN" section are legacy remnants of the old PIN gate.
+
 ## Business rules (from the revision spec — do not change without sign-off)
 
-- Snapshot `unitPrice` and `unitCost` on every transaction item. Changing prices
-  today must never alter past reports.
-- Discounts: collect all eligible rules, apply only the single most valuable one
-  (tie-break: highest priority), store `discountRuleName` on the transaction. Never stack.
-- Margin guard: warn (red confirm) when final total < total cost × 1.1.
-- Bonus products (`isBonus` items) reduce stock, have price 0, and count into HPP at cost.
-- Reseller pricing is a flat per-bottle tier price (not a percentage): highest
-  min-bottles level reached wins; MOQ must be met unless the customer has a locked
-  level. When no levels exist, the variant's base `resellerPrice` applies.
-- Stock day: entering the opening count adjusts the balance to the physical count;
-  sales auto-decrement; additions/damage are logged; closing stores expected vs actual
-  and writes a `correction` movement for the difference.
-- **No manual date inputs anywhere** for transactions/expenses (dates are automatic).
-  The report period picker (including a specific date) is a report filter, not data entry.
-- P&L: Omzet (gross, bonus excluded) − Diskon = Penjualan Bersih; ± Pembulatan;
-  − HPP (includes bonus items) = Laba Kotor; − Biaya Operasional − Kerugian Rusak
-  = Laba Bersih; margin % = laba bersih ÷ penjualan bersih. Rounding is shown as its
-  own line so the report reconciles with cash (Σ finalTotal).
-- Damage movements snapshot `unitCost`; older/without it fall back to the current
-  variant cost. Expenses are stored with automatic date. Cash close assumes
-  cash/QRIS/transfer separation and treats received payments as cash.
-- Rounding: final total rounds to the nearest `roundingStep` (default 500), toggle in Setting.
-- Stock may go negative (selling when stock is 0 is allowed, with a warning badge).
-- Cancel last transaction: only the latest, within 15 minutes, reason required; it marks
-  the transaction cancelled, restores stock via `cancel` movements and writes an audit
-  entry. Stock-day summaries ignore movements tied to cancelled transactions.
-- Attach customer to the last transaction: only within 3 minutes and only if it has no
-  customer; it records the buyer without changing prices/totals (audited).
-- Audit log covers: cancel, attach, price/cost changes, manual stock, expenses, payments.
-- WhatsApp receipt is a `wa.me` deep link built from the transaction snapshot.
-- Service worker requires a secure context; over LAN HTTP the app still works but is
-  not installable offline (see DEPLOY.md for HTTPS options).
-- PIN is a local UI gate only — it is not server security.
+- Payment method: **CASH only**. No QRIS/transfer, no payment gateway.
+- **No** reseller pricing, price levels/tiers, discount engine, bonus products, or "tutup buku".
+- Snapshot `unitPrice`, `unitCost`, and `netProfitSnapshot` on every transaction item;
+  changing prices today must never alter past reports.
+- Cart quantity is capped at available stock; out-of-stock variants are shown greyed/disabled.
+  A completed sale decrements stock (floor 0; no negative stock).
+- Owner sets net profit per variant (`netProfitPerUnit`); Dompet computes today's product
+  profit from that snapshot. Daily result = total product profit − total expenses.
+- Expenses: presets (`expensePresets`) plus manual entries. No closing; each day is a new
+  period automatically and past data stays in Histori.
+- Histori (`/laporan`) persists across days and can be filtered by period, exported to CSV,
+  and printed to PDF.
+- No manual date inputs for transactions/expenses (dates are automatic). The report period
+  picker is a filter, not data entry.
 
 ## Safety rules
 
-- NEVER commit `.env.local`, `local.db` (unused legacy), or any secret.
+- NEVER commit `.env.local`, `local.db` (unused legacy), `certs/`, or any secret.
   Verify with `git status --short` before committing.
 - Data recovery: backup/restore JSON in Setting (`src/lib/backup.ts`).
 - Only commit/push when the user explicitly asks.
 
-## Roadmap (per revision doc)
+## Parallel work (multi-agent)
 
-- **Fase 1 (done):** schema, products/variants/costs, POS Beli, basic customers, PIN, backup.
-- **Fase 2 (done):** stock days (opening/damage/addition/closing), discount engine +
-  simulator + margin guard, reseller tiers/MOQ/receivables/returns, piutang page.
-- **Fase 3 (done):** expenses, daily cash close, full financial Beranda (P&L, period
-  filter, SVG charts, top products, per buyer type), reports page with CSV + print PDF.
-- **Fase 4 (done):** fuzzy search, PWA service worker (needs HTTPS to install), cancel
-  last transaction, attach member, audit log, WhatsApp receipt.
-- All phases from the revision doc are implemented. Remaining known gap: full offline
-  install only works over HTTPS.
-- Production deploy: Vercel (free plan), zero env vars, static export. Config in
-  `vercel.json`. `vercel.json` gives HTTPS → activates the service worker.
+- Parallel agents use isolated Git worktrees under `.slim/worktrees/` (gitignored). Lane and
+  file ownership is tracked in `.slim/worktrees.json`. Never edit files owned by another lane;
+  honor each lane's `areas` / `forbiddenAreas`.
+
+## Status & known gaps
+
+- Implemented: login + roles + permission enforcement/nav guard, Beranda product-selection
+  cart flow, minimal blue theme, Dompet, Histori, Stok (restock + set exact), PWA/offline
+  app-shell, backup/restore.
+- In progress (revision-2 Settings): store name editing, owner ID/sandi change, admin
+  account + permission management, per-variant profit UI, expense presets UI.
+- Full offline install requires HTTPS (Vercel or local certs); LAN HTTP works but is not
+  installable.
+- `vercel.json` sets `outputDirectory: ".next"` while the build also emits `out/` — verify
+  actual Vercel output when deploying.

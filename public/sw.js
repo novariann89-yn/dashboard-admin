@@ -1,13 +1,11 @@
-const CACHE = "dashboard-admin-v1";
+const CACHE = "dashboard-admin-v2";
 
 const APP_SHELL = [
   "/",
-  "/beli",
+  "/checkout",
+  "/dompet",
   "/pelanggan",
-  "/piutang",
   "/stok",
-  "/pengeluaran",
-  "/kasir",
   "/laporan",
   "/setting",
   "/manifest.webmanifest",

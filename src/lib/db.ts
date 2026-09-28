@@ -7,7 +7,6 @@ import type {
   Product,
   ProductVariant,
   Setting,
-  StockOpening,
   Transaction,
   TransactionItem,
   User,
@@ -24,7 +23,6 @@ export class TokoDB extends Dexie {
   users!: Table<User, string>;
   auditLog!: Table<AuditLog, string>;
   settings!: Table<Setting, string>;
-  stockOpenings!: Table<StockOpening, string>;
 
   constructor() {
     super("toko-db");
@@ -39,7 +37,6 @@ export class TokoDB extends Dexie {
       users: "id, username, role, active",
       auditLog: "id, at, table, recordId",
       settings: "key",
-      stockOpenings: "id, date, variantId, qty",
     });
   }
 }

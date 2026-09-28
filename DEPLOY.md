@@ -5,7 +5,8 @@
 - **Semua data tersimpan di HP** (IndexedDB via Dexie). Aplikasi jalan penuh tanpa internet di pasar.
 - Build berupa **file statis** (folder `out/`) — tidak ada server database, tidak ada akun cloud wajib.
 - Server di komputer hanya bertugas **menyajikan file statis** untuk update / cek di HP.
-- Kunci aplikasi = PIN lokal (gate tampilan), diatur di Setting.
+- Login lokal dengan 2 role: **Owner** (semua halaman) dan **Admin/Karyawan**
+  (Beranda, Pelanggan, Stok). Dompet & Setting hanya Owner.
 - Backup = file JSON dari Setting, disimpan manual (Google Drive / komputer).
 
 ## Deploy ke Vercel (produksi — direkomendasikan)
