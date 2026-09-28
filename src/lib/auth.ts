@@ -1,5 +1,6 @@
 import { randomSalt, hashPin as hashPassword, verifyPin as verifyPassword } from "./pin";
 import { getDb } from "./db";
+import { newId } from "./id";
 import type { User } from "./types";
 
 const SESSION_KEY = "toko-session";
@@ -13,7 +14,7 @@ export interface Session {
 
 export async function login(username: string, password: string): Promise<Session | null> {
   const db = getDb();
-  const user = await db.users.where("username").equals(username).first();
+  const user = await db.users.where("username").equals(username.trim()).first();
   if (!user || !user.active) return null;
   const valid = await verifyPassword(password, user.passwordSalt, user.passwordHash);
   if (!valid) return null;
@@ -64,11 +65,21 @@ export async function createUser(input: {
   permissions?: string[];
 }): Promise<User> {
   const db = getDb();
+  const username = input.username.trim();
+  if (!username) throw new Error("ID wajib diisi");
+  if (!input.password) throw new Error("Sandi wajib diisi");
+
+  const normalized = username.toLowerCase();
+  const duplicate = await db.users
+    .filter((user) => user.username.trim().toLowerCase() === normalized)
+    .first();
+  if (duplicate) throw new Error("ID sudah dipakai");
+
   const salt = randomSalt();
   const hash = await hashPassword(input.password, salt);
   const user: User = {
-    id: crypto.randomUUID(),
-    username: input.username,
+    id: newId(),
+    username,
     passwordHash: hash,
     passwordSalt: salt,
     role: input.role,
