@@ -3,8 +3,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { IconBottle, IconEye, IconEyeOff, IconLock, IconUser } from "@/components/icons";
 import { login, getSession, logout as doLogout } from "@/lib/auth";
-import { ensureSeeded } from "@/lib/seed";
-import { DEFAULT_OWNER_USERNAME, DEFAULT_OWNER_PASSWORD } from "@/lib/seed";
+import {
+  ensureSeeded,
+  DEFAULT_OWNER_USERNAME,
+  DEFAULT_OWNER_PASSWORD,
+} from "@/lib/seed";
 import { useRouter } from "next/navigation";
 
 type Stage = "loading" | "login" | "unlocked";

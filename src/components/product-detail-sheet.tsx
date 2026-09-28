@@ -6,7 +6,7 @@ import { rupiah } from "@/lib/format";
 import { useCart } from "./cart-context";
 
 export function ProductDetailSheet() {
-  const { detailProduct, closeDetail, addItem, setIsOpen } = useCart();
+  const { detailProduct, closeDetail, addItem } = useCart();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
 
@@ -38,7 +38,6 @@ export function ProductDetailSheet() {
       stock: selected.stock,
     });
     closeDetail();
-    setIsOpen(true);
   }
 
   return (

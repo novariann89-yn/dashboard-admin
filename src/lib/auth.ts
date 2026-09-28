@@ -41,20 +41,6 @@ export function getSession(): Session | null {
   }
 }
 
-export function hasPermission(page: string): boolean {
-  const session = getSession();
-  if (!session) return false;
-  if (session.role === "owner") return true;
-  return session.permissions.includes(page);
-}
-
-export function requireRole(role: "owner" | "admin"): boolean {
-  const session = getSession();
-  if (!session) return false;
-  if (session.role === "owner") return true;
-  return session.role === role;
-}
-
 export async function changePassword(
   userId: string,
   oldPassword: string,

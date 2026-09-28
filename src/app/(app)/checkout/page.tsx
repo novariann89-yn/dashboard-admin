@@ -1,28 +1,22 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { IconX, IconMinus, IconPlus, IconSearch, IconCheck, IconReceipt } from "@/components/icons";
+import { IconReceipt } from "@/components/icons";
 import { useToast } from "@/components/toast";
-import { cardClass, buttonClass, inputClass } from "@/components/ui";
+import { cardClass, inputClass } from "@/components/ui";
 import { getDb } from "@/lib/db";
 import { listCustomers } from "@/lib/repos/customers";
 import { searchCustomers } from "@/lib/search";
-import { formatTime, rupiah } from "@/lib/format";
+import { rupiah } from "@/lib/format";
 import { createTransaction, getTransactionItems } from "@/lib/repos/transactions";
 import type { TransactionItem } from "@/lib/types";
 import { buildReceiptText, whatsappUrl } from "@/lib/receipt";
 import { useCart } from "@/components/cart-context";
 import { useDebouncedValue } from "@/lib/use-debounced";
 
-function formatRupiah(num: number): string {
-  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(num);
-}
-
 export default function CheckoutPage() {
-  const router = useRouter();
   const toast = useToast();
   const { items, clearCart, subtotal, totalItems, setIsOpen } = useCart();
   const customers = useLiveQuery(() => listCustomers(), [], []);
@@ -127,15 +121,15 @@ export default function CheckoutPage() {
                 <span className="text-2xl">{item.emoji}</span>
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-ink truncate">{item.productName} {item.sizeName}</p>
-                  <p className="text-xs text-ink-soft">{formatRupiah(item.unitPrice)} × {item.qty}</p>
+                  <p className="text-xs text-ink-soft">{rupiah(item.unitPrice)} × {item.qty}</p>
                 </div>
-                <span className="font-bold text-primary tabular-nums">{formatRupiah(item.unitPrice * item.qty)}</span>
+                <span className="font-bold text-primary tabular-nums">{rupiah(item.unitPrice * item.qty)}</span>
               </li>
             ))}
           </ul>
           <div className="mt-3 pt-3 border-t border-line flex justify-between font-bold text-lg">
             <span>Subtotal</span>
-            <span className="text-primary">{formatRupiah(subtotal)}</span>
+            <span className="text-primary">{rupiah(subtotal)}</span>
           </div>
         </section>
 
@@ -199,7 +193,7 @@ export default function CheckoutPage() {
           <div className="space-y-3">
             <div>
               <label className="block text-sm font-bold text-ink-soft mb-1">Total Bayar</label>
-              <div className="text-2xl font-extrabold text-primary tabular-nums">{formatRupiah(subtotal)}</div>
+              <div className="text-2xl font-extrabold text-primary tabular-nums">{rupiah(subtotal)}</div>
             </div>
             <div>
               <label htmlFor="received" className="block text-sm font-bold text-ink-soft mb-1">Uang Diterima</label>
@@ -215,7 +209,7 @@ export default function CheckoutPage() {
             </div>
             <div>
               <label className="block text-sm font-bold text-ink-soft mb-1">Kembalian</label>
-              <div className="text-2xl font-extrabold text-success tabular-nums">{formatRupiah(changeAmount)}</div>
+              <div className="text-2xl font-extrabold text-success tabular-nums">{rupiah(changeAmount)}</div>
             </div>
             <div className="flex flex-wrap gap-2">
               {quickAmounts.map((amt) => (
@@ -225,7 +219,7 @@ export default function CheckoutPage() {
                   onClick={() => setReceivedAmount(amt.toLocaleString("id-ID"))}
                   className="flex-1 min-w-[80px] rounded-control border-2 py-2 text-sm font-bold border-line bg-surface text-ink"
                 >
-                  {formatRupiah(amt)}
+                  {rupiah(amt)}
                 </button>
               ))}
             </div>

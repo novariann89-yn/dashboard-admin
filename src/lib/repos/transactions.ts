@@ -63,6 +63,14 @@ export async function createTransaction(
     };
   });
 
+  for (const line of prepared) {
+    if (line.qty > line.variant.stock) {
+      throw new Error(
+        `Stok ${line.productName} ${line.variant.sizeName} tinggal ${line.variant.stock}`,
+      );
+    }
+  }
+
   const subtotal = prepared.reduce(
     (sum, line) => sum + line.unitPrice * line.qty,
     0,

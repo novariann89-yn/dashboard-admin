@@ -15,7 +15,13 @@ export function PermissionGate({ children }: { children: ReactNode }) {
     setAllowed(canAccess(getSession(), pathname));
   }, [pathname]);
 
-  if (allowed === null) return null;
+  if (allowed === null) {
+    return (
+      <div className="flex items-center justify-center py-20 text-sm text-ink-soft">
+        Memuat...
+      </div>
+    );
+  }
 
   if (!allowed) {
     return (
