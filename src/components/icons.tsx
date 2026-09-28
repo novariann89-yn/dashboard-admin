@@ -181,6 +181,26 @@ export function IconEyeOff(props: IconProps) {
   );
 }
 
+export function IconWallet(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3 6a2 2 0 0 1 2-2h11a1 1 0 0 1 1 1v1" />
+      <path d="M3 6v12a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1H5a2 2 0 0 1-2-2Z" />
+      <circle cx="16.5" cy="14" r="1.1" />
+    </Svg>
+  );
+}
+
+export function IconHistory(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 8v4l3 2" />
+    </Svg>
+  );
+}
+
 export function IconLock(props: IconProps) {
   return (
     <Svg {...props}>

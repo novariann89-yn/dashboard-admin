@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BottomNav } from "@/components/bottom-nav";
 import { LoginGate } from "@/components/login-gate";
+import { PermissionGate } from "@/components/permission-gate";
 import { ToastProvider } from "@/components/toast";
 import { CartProvider } from "@/components/cart-context";
 import { CartSheet } from "@/components/cart-sheet";
 import { ProductDetailSheet } from "@/components/product-detail-sheet";
 import { IconBottle } from "@/components/icons";
+import { getSession, logout as doLogout, type Session } from "@/lib/auth";
 import { readCachedTheme, syncThemeClass } from "@/lib/theme";
 
 export default function AppLayout({
@@ -31,17 +33,22 @@ export default function AppLayout({
         <LoginGate>
           <div className="mx-auto flex min-h-screen w-full max-w-md flex-col">
             <header className="no-print sticky top-0 z-30 border-b border-line bg-surface/85 backdrop-blur">
-              <div className="flex items-center gap-2 px-4 py-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-control bg-primary shadow-soft">
-                  <IconBottle className="h-4 w-4 text-white" />
-                </span>
-                <span className="text-sm font-extrabold tracking-tight text-ink">
-                  Dashboard Admin
-                </span>
+              <div className="flex items-center justify-between gap-2 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-control bg-primary shadow-soft">
+                    <IconBottle className="h-4 w-4 text-white" />
+                  </span>
+                  <span className="text-sm font-extrabold tracking-tight text-ink">
+                    Dashboard Admin
+                  </span>
+                </div>
+                <SessionMenu />
               </div>
             </header>
 
-            <main className="flex-1 p-4 pb-28">{children}</main>
+            <main className="flex-1 p-4 pb-28">
+              <PermissionGate>{children}</PermissionGate>
+            </main>
 
             <BottomNav />
           </div>
@@ -50,5 +57,33 @@ export default function AppLayout({
         </LoginGate>
       </CartProvider>
     </ToastProvider>
+  );
+}
+
+function SessionMenu() {
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    setSession(getSession());
+  }, []);
+
+  if (!session) return null;
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+        {session.role === "owner" ? "Owner" : "Admin"}
+      </span>
+      <button
+        type="button"
+        onClick={() => {
+          doLogout();
+          window.location.href = "/";
+        }}
+        className="text-[11px] font-bold text-ink-soft transition hover:text-error"
+      >
+        Keluar
+      </button>
+    </div>
   );
 }
