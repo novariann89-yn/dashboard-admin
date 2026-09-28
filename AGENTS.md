@@ -107,10 +107,9 @@ After code changes, run `npm run restart` so the phone gets the update.
 
 - Implemented: login + roles + permission enforcement/nav guard, Beranda product-selection
   cart flow, minimal blue theme, Dompet, Histori, Stok (restock + set exact), PWA/offline
-  app-shell, backup/restore.
-- In progress (revision-2 Settings): store name editing, owner ID/sandi change, admin
-  account + permission management, per-variant profit UI, expense presets UI.
+  app-shell, backup/restore, revision-2 Settings (store name, owner account/sandi, admin
+  accounts + permissions, per-variant profit, expense presets).
 - Full offline install requires HTTPS (Vercel or local certs); LAN HTTP works but is not
-  installable.
-- `vercel.json` sets `outputDirectory: ".next"` while the build also emits `out/` — verify
-  actual Vercel output when deploying.
+  installable. `vercel.json` relies on Vercel auto-detecting the Next.js static export
+  (`output: "export"` → `out/`); do not set `outputDirectory` (pointing it at `out`/`.next`
+  breaks the deploy).
