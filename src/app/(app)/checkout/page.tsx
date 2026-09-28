@@ -236,7 +236,7 @@ export default function CheckoutPage() {
           type="button"
           onClick={handleCheckout}
           disabled={parseInt(receivedAmount.replace(/\D/g, "")) < subtotal}
-          className="w-full rounded-control bg-gradient-primary text-white py-3.5 font-extrabold shadow-card disabled:opacity-40"
+          className="w-full rounded-control bg-primary py-3.5 font-extrabold text-white shadow-soft transition hover:bg-primary-dark active:scale-[0.99] disabled:opacity-40"
         >
           Bayar & Simpan Transaksi
         </button>

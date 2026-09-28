@@ -6,37 +6,37 @@
   --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
-  --color-canvas: #f0f4f8;
+  --color-canvas: #f7f9fc;
   --color-surface: #ffffff;
-  --color-ink: #1a2332;
-  --color-ink-soft: #5a6a85;
-  --color-line: #d0d8e8;
+  --color-ink: #101828;
+  --color-ink-soft: #667085;
+  --color-line: #e6eaf0;
   --color-primary: #2563eb;
   --color-primary-dark: #1d4ed8;
   --color-primary-light: #3b82f6;
-  --color-accent: #06b6d4;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
+  --color-accent: #0ea5e9;
+  --color-success: #12b76a;
+  --color-warning: #f79009;
   --color-error: #ef4444;
 
-  --radius-card: 0.75rem;
-  --radius-control: 0.5rem;
+  --radius-card: 0.875rem;
+  --radius-control: 0.625rem;
 
-  --shadow-soft: 0 2px 8px rgba(37, 99, 235, 0.08);
-  --shadow-card: 0 4px 16px rgba(37, 99, 235, 0.1);
-  --shadow-elevated: 0 8px 24px rgba(37, 99, 235, 0.12);
+  --shadow-soft: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-card: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-elevated: 0 12px 32px rgba(16, 24, 40, 0.12);
 }
 
 .dark {
-  --color-canvas: #0f172a;
-  --color-surface: #1e293b;
-  --color-ink: #f1f5f9;
+  --color-canvas: #0b1220;
+  --color-surface: #131c2e;
+  --color-ink: #eef2f8;
   --color-ink-soft: #94a3b8;
-  --color-line: #334155;
+  --color-line: #23304a;
 
-  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.4);
-  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-elevated: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
 
 @layer base {
@@ -45,11 +45,24 @@
   }
 
   body {
-    background: linear-gradient(180deg, #f0f4f8 0%, #e8eef8 100%);
+    background-color: var(--color-canvas);
+    background-image:
+      radial-gradient(circle at 12% 8%, rgba(37, 99, 235, 0.1), transparent 34%),
+      radial-gradient(circle at 88% 14%, rgba(14, 165, 233, 0.08), transparent 32%),
+      radial-gradient(circle at 78% 96%, rgba(37, 99, 235, 0.07), transparent 38%),
+      radial-gradient(rgba(37, 99, 235, 0.09) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 100% 100%, 22px 22px;
+    background-attachment: fixed;
   }
 
   .dark body {
-    background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+    background-color: var(--color-canvas);
+    background-image:
+      radial-gradient(circle at 12% 8%, rgba(37, 99, 235, 0.16), transparent 34%),
+      radial-gradient(circle at 88% 14%, rgba(14, 165, 233, 0.1), transparent 32%),
+      radial-gradient(rgba(59, 130, 246, 0.08) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 22px 22px;
+    background-attachment: fixed;
   }
 
   :focus-visible {

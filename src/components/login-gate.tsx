@@ -70,7 +70,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-sm flex-col justify-center gap-6 p-6">
       <div className="flex flex-col items-center gap-3 text-center">
-        <span className="flex h-16 w-16 items-center justify-center rounded-card bg-gradient-primary shadow-card">
+        <span className="flex h-16 w-16 items-center justify-center rounded-card bg-primary shadow-card">
           <IconBottle className="h-8 w-8 text-white" />
         </span>
         <h1 className="text-2xl font-extrabold tracking-tight text-ink">Dashboard Admin</h1>
@@ -97,7 +97,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Masukkan ID"
               autoComplete="username"
-              className="w-full rounded-control border-2 border-line bg-surface px-10 py-3 text-base font-medium focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full rounded-control border border-line bg-surface px-10 py-3 text-base font-medium transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
             />
           </div>
         </div>
@@ -115,7 +115,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Masukkan Sandi"
               autoComplete="current-password"
-              className="w-full rounded-control border-2 border-line bg-surface px-10 py-3 text-base font-medium pr-12 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full rounded-control border border-line bg-surface px-10 py-3 pr-12 text-base font-medium transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
             />
             <button
               type="button"
@@ -132,7 +132,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
           type="button"
           onClick={handleLogin}
           disabled={!username.trim() || !password}
-          className="rounded-control border-2 border-primary bg-primary text-white py-3.5 text-base font-extrabold shadow-card transition hover:bg-primary-dark active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+          className="rounded-control bg-primary py-3.5 text-base font-extrabold text-white shadow-soft transition hover:bg-primary-dark active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
         >
           Masuk
         </button>

@@ -21,8 +21,8 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="no-print fixed bottom-0 left-1/2 z-10 w-full max-w-md -translate-x-1/2 border-t-2 border-ink bg-surface">
-      <div className="grid grid-cols-5 gap-1 px-2 py-2">
+    <nav className="no-print fixed bottom-0 left-1/2 z-30 w-full max-w-md -translate-x-1/2 border-t border-line bg-surface/90 backdrop-blur">
+      <div className="grid grid-cols-4 gap-1 px-2 py-2">
         {navItems.map(({ href, label, Icon }) => {
           const active =
             href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -31,10 +31,10 @@ export function BottomNav() {
               key={href}
               href={href}
               aria-current={active ? "page" : undefined}
-              className={`flex flex-col items-center gap-0.5 rounded-control border-2 px-1 py-1.5 text-[10px] font-bold ${
+              className={`flex flex-col items-center gap-0.5 rounded-control px-1 py-1.5 text-[10px] font-bold transition ${
                 active
-                  ? "border-ink bg-primary text-white"
-                  : "border-transparent text-ink-soft"
+                  ? "bg-primary/10 text-primary"
+                  : "text-ink-soft hover:text-ink"
               }`}
             >
               <Icon className="h-5 w-5" />

@@ -1,123 +1,153 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { IconX, IconMinus, IconPlus } from "@/components/icons";
+import { useEffect, useState } from "react";
+import { IconMinus, IconPlus, IconX } from "@/components/icons";
+import { rupiah } from "@/lib/format";
 import { useCart } from "./cart-context";
 
 export function ProductDetailSheet() {
-  const { detailVariant, addItem } = useCart();
+  const { detailProduct, closeDetail, addItem, setIsOpen } = useCart();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
 
   useEffect(() => {
+    if (!detailProduct) return;
+    const firstAvailable =
+      detailProduct.variants.find((v) => v.stock > 0) ?? detailProduct.variants[0];
+    setSelectedId(firstAvailable?.id ?? null);
     setQty(1);
-  }, [detailVariant]);
+  }, [detailProduct]);
 
-  if (!detailVariant) return null;
+  if (!detailProduct) return null;
 
-  const maxQty = detailVariant.stock;
-  const isOutOfStock = detailVariant.stock <= 0;
+  const selected =
+    detailProduct.variants.find((v) => v.id === selectedId) ?? null;
+  const maxQty = selected ? Math.max(1, selected.stock) : 1;
+  const canAdd = !!selected && selected.stock > 0;
 
-  const handleDecrement = () => {
-    if (qty > 1) setQty(qty - 1);
-  };
-
-  const handleIncrement = () => {
-    if (qty < maxQty) setQty(qty + 1);
-  };
-
-  const handleAdd = () => {
+  function handleAdd() {
+    if (!selected || !canAdd) return;
     addItem({
-      variantId: detailVariant.id,
-      productName: detailVariant.productName,
-      sizeName: detailVariant.sizeName,
-      emoji: detailVariant.productEmoji,
+      variantId: selected.id,
+      productName: detailProduct!.productName,
+      sizeName: selected.sizeName,
+      emoji: detailProduct!.productEmoji,
       qty,
-      unitPrice: detailVariant.sellPrice,
-      unitCost: detailVariant.costPrice,
-      stock: detailVariant.stock,
+      unitPrice: selected.sellPrice,
+      unitCost: selected.costPrice,
+      stock: selected.stock,
     });
-  };
-
-  if (!detailVariant) return null;
+    closeDetail();
+    setIsOpen(true);
+  }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 animate-slide-up">
-      <div className="bg-surface rounded-t-card p-4 shadow-elevated max-h-[85vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-extrabold text-ink">Pilih Variasi</h2>
-          <button onClick={() => {}} className="p-1 rounded-control text-ink-soft hover:text-ink">
-            <span className="text-2xl">×</span>
+    <div className="fixed inset-0 z-50 flex items-end justify-center">
+      <button
+        type="button"
+        aria-label="Tutup"
+        onClick={closeDetail}
+        className="absolute inset-0 bg-ink/40"
+      />
+      <div className="relative w-full max-w-md animate-slide-up rounded-t-card border-t border-line bg-surface p-4 shadow-elevated">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-extrabold text-ink">Pilih Varian</h2>
+          <button
+            type="button"
+            onClick={closeDetail}
+            className="rounded-control p-1 text-ink-soft transition hover:text-ink"
+            aria-label="Tutup"
+          >
+            <IconX className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="flex items-center gap-3 mb-4 p-3 bg-surface rounded-card border border-line">
-          <span className="text-4xl">{detailVariant.productEmoji}</span>
-          <div className="flex-1">
-            <p className="font-bold text-ink">{detailVariant.productName}</p>
-            <p className="text-xs text-ink-soft">{detailVariant.sizeName}</p>
-            <p className="mt-1 text-lg font-extrabold text-primary tabular-nums">
-              {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(detailVariant.sellPrice)}
+        <div className="mb-4 flex items-center gap-3">
+          <span className="text-4xl">{detailProduct.productEmoji}</span>
+          <div>
+            <p className="font-bold text-ink">{detailProduct.productName}</p>
+            <p className="text-xs text-ink-soft">
+              {canAdd && selected
+                ? `${rupiah(selected.sellPrice)} · stok ${selected.stock}`
+                : "Stok habis"}
             </p>
-            <p className="text-[10px] text-ink-soft">Stok tersedia: {detailVariant.stock}</p>
           </div>
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-bold text-ink-soft mb-2">Jumlah</label>
-          <div className="flex items-center justify-between p-3 bg-surface rounded-card border border-line">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-soft">
+            Ukuran / varian
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {detailProduct.variants.map((variant) => {
+              const disabled = variant.stock <= 0;
+              const active = variant.id === selectedId;
+              return (
+                <button
+                  key={variant.id}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => {
+                    setSelectedId(variant.id);
+                    setQty(1);
+                  }}
+                  className={`rounded-control border px-3 py-2 text-left text-xs transition ${
+                    active
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-line bg-surface text-ink"
+                  } ${disabled ? "cursor-not-allowed opacity-40" : ""}`}
+                >
+                  <span className="block font-bold">{variant.sizeName}</span>
+                  <span className="tabular-nums">{rupiah(variant.sellPrice)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-soft">
+            Jumlah
+          </p>
+          <div className="flex items-center justify-between rounded-control border border-line bg-surface px-3 py-2">
             <button
-              onClick={() => setQty(Math.max(1, qty - 1))}
-              disabled={qty <= 1}
-              className="rounded-control border-2 border-line bg-surface p-2 disabled:opacity-40"
+              type="button"
+              onClick={() => setQty((q) => Math.max(1, q - 1))}
+              disabled={!canAdd || qty <= 1}
+              className="rounded-control p-2 text-ink disabled:opacity-30"
               aria-label="Kurangi"
             >
-              <span className="text-xl">−</span>
+              <IconMinus className="h-5 w-5" />
             </button>
-            <input
-              type="number"
-              value={qty}
-              onChange={(e) => {
-                const val = Math.max(1, Math.min(detailVariant.stock, parseInt(e.target.value) || 1));
-                setQty(val);
-              }}
-              min={1}
-              max={detailVariant.stock}
-              className="w-20 text-center text-lg font-extrabold tabular-nums border-none bg-transparent focus:outline-none"
-            />
+            <span className="text-lg font-extrabold tabular-nums text-ink">
+              {canAdd ? qty : 0}
+            </span>
             <button
-              onClick={() => setQty(Math.min(detailVariant.stock, qty + 1))}
-              disabled={qty >= detailVariant.stock}
-              className="rounded-control border-2 border-line bg-surface p-2 disabled:opacity-40"
+              type="button"
+              onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
+              disabled={!canAdd || qty >= maxQty}
+              className="rounded-control p-2 text-ink disabled:opacity-30"
               aria-label="Tambah"
             >
-              <span className="text-xl">+</span>
+              <IconPlus className="h-5 w-5" />
             </button>
           </div>
-          <p className="text-[10px] text-ink-soft mt-1 text-right">Maks: {detailVariant.stock} pcs</p>
         </div>
 
-        <div className="mb-4 pt-2 border-t border-line">
-          <div className="flex justify-between text-base font-bold">
-            <span>Subtotal</span>
-            <span className="text-primary tabular-nums">
-              {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(detailVariant.sellPrice * qty)}
-            </span>
-          </div>
+        <div className="mb-4 flex items-center justify-between border-t border-line pt-3">
+          <span className="text-sm font-bold text-ink">Subtotal</span>
+          <span className="text-lg font-extrabold tabular-nums text-primary">
+            {rupiah((selected?.sellPrice ?? 0) * (canAdd ? qty : 0))}
+          </span>
         </div>
 
         <button
-          onClick={() => {}}
-          disabled={qty > detailVariant.stock}
-          className="w-full rounded-control bg-gradient-primary text-white py-3.5 font-extrabold shadow-card disabled:opacity-40"
+          type="button"
+          onClick={handleAdd}
+          disabled={!canAdd}
+          className="w-full rounded-control bg-primary py-3 font-extrabold text-white transition active:scale-[0.99] disabled:opacity-40"
         >
-          Masukkan ke Keranjang
-        </button>
-
-        <button
-          onClick={() => {}}
-          className="w-full mt-2 rounded-control border-2 border-line text-ink-soft py-2 text-sm font-bold"
-        >
-          Batal
+          {canAdd ? "Masukkan ke Keranjang" : "Stok habis"}
         </button>
       </div>
     </div>
