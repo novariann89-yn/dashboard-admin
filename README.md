@@ -1,4 +1,4 @@
-# Dashboard Toko
+# SuperSoy
 
 Dashboard admin/POS offline-first untuk warung minuman & snack kedelai (Mas Andik).
 Semua data tersimpan lokal di HP (IndexedDB via Dexie), UI bahasa Indonesia, login

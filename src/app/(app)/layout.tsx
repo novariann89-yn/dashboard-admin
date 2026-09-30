@@ -11,12 +11,15 @@ import { ProductDetailSheet } from "@/components/product-detail-sheet";
 import { IconBottle } from "@/components/icons";
 import { getSession, logout as doLogout, type Session } from "@/lib/auth";
 import { readCachedTheme, syncThemeClass } from "@/lib/theme";
+import { useAppName } from "@/lib/use-app-name";
 
 export default function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const appName = useAppName();
+
   useEffect(() => {
     const apply = () => {
       syncThemeClass(readCachedTheme());
@@ -39,7 +42,7 @@ export default function AppLayout({
                     <IconBottle className="h-4 w-4 text-white" />
                   </span>
                   <span className="text-sm font-extrabold tracking-tight text-ink">
-                    Dashboard Admin
+                    {appName}
                   </span>
                 </div>
                 <SessionMenu />

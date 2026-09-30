@@ -1,6 +1,6 @@
 Before any coding task, load the `lean-coding` skill. Keep answers terse.
 
-# AGENTS.md — Dashboard Toko (offline-first, revisi 2)
+# AGENTS.md — SuperSoy (offline-first, revisi 2)
 
 Admin/POS dashboard for a soy-milk snack stall (owner: Mas Andik). **All data
 lives on the phone** (IndexedDB via Dexie); the app is a static export (folder

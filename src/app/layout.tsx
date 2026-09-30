@@ -10,11 +10,11 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Dashboard Admin",
+  title: "SuperSoy",
   description: "Dashboard penjualan, pelanggan, dan stok",
   appleWebApp: {
     capable: true,
-    title: "Dashboard Admin",
+    title: "SuperSoy",
     statusBarStyle: "default",
   },
 };

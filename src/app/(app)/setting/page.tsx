@@ -83,6 +83,11 @@ export default function SettingPage() {
         loaded={settings !== null}
       />
 
+      <AppNameSection
+        appName={settings?.appName ?? "SuperSoy"}
+        loaded={settings !== null}
+      />
+
       <AppearanceSection
         theme={settings?.theme ?? "system"}
         loaded={settings !== null}
@@ -165,9 +170,9 @@ export default function SettingPage() {
       <section className={cardClass}>
         <h2 className={sectionLabelClass}>Tentang</h2>
         <p className="mt-1 text-xs text-ink-soft">
-          Dashboard Admin v0.5.0 (Fase 4). Semua data tersimpan lokal di HP
-          (offline). PIN hanya mengunci tampilan aplikasi. Instal offline penuh
-          perlu HTTPS (lihat DEPLOY.md).
+          {settings?.appName ?? "SuperSoy"} v0.5.0 (Fase 4). Semua data tersimpan
+          lokal di HP (offline). PIN hanya mengunci tampilan aplikasi. Instal
+          offline penuh perlu HTTPS (lihat DEPLOY.md).
         </p>
       </section>
     </div>
@@ -214,6 +219,52 @@ function StoreSection({
           className={inputClass}
         />
         <button className={buttonClass}>Simpan nama toko</button>
+      </form>
+    </section>
+  );
+}
+
+function AppNameSection({
+  appName,
+  loaded,
+}: {
+  appName: string;
+  loaded: boolean;
+}) {
+  const toast = useToast();
+  const [name, setName] = useState(appName);
+
+  useEffect(() => {
+    if (!loaded) return;
+    setName(appName);
+  }, [loaded, appName]);
+
+  return (
+    <section className={cardClass}>
+      <h2 className={sectionLabelClass}>Nama Aplikasi</h2>
+      <p className="mt-1 text-xs text-ink-soft">
+        Nama yang tampil di header dan halaman login. Nama ikon saat dipasang di
+        HP tetap SuperSoy.
+      </p>
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!name.trim()) {
+            toast("Nama aplikasi wajib diisi", "error");
+            return;
+          }
+          await updateSettings({ appName: name.trim() });
+          toast("Nama aplikasi disimpan");
+        }}
+        className="mt-3 flex flex-col gap-2"
+      >
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="mis. SuperSoy"
+          className={inputClass}
+        />
+        <button className={buttonClass}>Simpan nama aplikasi</button>
       </form>
     </section>
   );

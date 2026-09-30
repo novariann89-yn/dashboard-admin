@@ -1,4 +1,4 @@
-# Menjalankan & Deploy — Dashboard Admin
+# Menjalankan & Deploy — SuperSoy
 
 ## Arsitektur (v2 — offline-first)
 

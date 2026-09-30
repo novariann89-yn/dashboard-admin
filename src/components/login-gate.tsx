@@ -9,11 +9,13 @@ import {
   DEFAULT_OWNER_PASSWORD,
 } from "@/lib/seed";
 import { useRouter } from "next/navigation";
+import { useAppName } from "@/lib/use-app-name";
 
 type Stage = "loading" | "login" | "unlocked";
 
 export function LoginGate({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const appName = useAppName();
   const [stage, setStage] = useState<"loading" | "login" | "unlocked">("loading");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -76,7 +78,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
         <span className="flex h-16 w-16 items-center justify-center rounded-card bg-primary shadow-card">
           <IconBottle className="h-8 w-8 text-white" />
         </span>
-        <h1 className="text-2xl font-extrabold tracking-tight text-ink">Dashboard Admin</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-ink">{appName}</h1>
         <p className="text-sm text-ink-soft">Masukkan ID dan Sandi</p>
       </div>
 

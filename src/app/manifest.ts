@@ -4,8 +4,8 @@ export const dynamic = "force-static";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Dashboard Toko",
-    short_name: "Dashboard",
+    name: "SuperSoy",
+    short_name: "SuperSoy",
     description: "Dashboard penjualan, pelanggan, stok, dan keuangan toko",
     start_url: "/",
     display: "standalone",
