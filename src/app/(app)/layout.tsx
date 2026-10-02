@@ -12,6 +12,7 @@ import { IconBottle } from "@/components/icons";
 import { getSession, logout as doLogout, type Session } from "@/lib/auth";
 import { readCachedTheme, syncThemeClass } from "@/lib/theme";
 import { useAppName } from "@/lib/use-app-name";
+import { loadAndApplyBackground } from "@/lib/background";
 
 export default function AppLayout({
   children,
@@ -28,6 +29,10 @@ export default function AppLayout({
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     media.addEventListener("change", apply);
     return () => media.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    loadAndApplyBackground();
   }, []);
 
   return (

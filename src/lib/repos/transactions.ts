@@ -160,6 +160,39 @@ export async function getTransaction(
   return getDb().transactions.get(id);
 }
 
+export async function deleteTransactions(ids: string[]): Promise<void> {
+  const unique = Array.from(new Set(ids));
+  if (unique.length === 0) return;
+
+  const db = getDb();
+  const rows = await db.transactions.bulkGet(unique);
+  const found = unique.filter((id, index) => rows[index]);
+
+  if (found.length === 0) return;
+
+  await db.transaction(
+    "rw",
+    [db.transactions, db.transactionItems],
+    async () => {
+      await db.transactionItems
+        .where("transactionId")
+        .anyOf(found)
+        .delete();
+      await db.transactions.bulkDelete(found);
+    },
+  );
+
+  await logAudit({
+    action: "delete_transactions",
+    table: "transactions",
+    newData: { count: found.length },
+  });
+}
+
+export async function deleteTransaction(id: string): Promise<void> {
+  await deleteTransactions([id]);
+}
+
 export async function getTransactionItems(
   transactionId: string,
 ): Promise<TransactionItem[]> {

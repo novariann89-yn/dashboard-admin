@@ -53,7 +53,10 @@ After code changes, run `npm run restart` so the phone gets the update.
 - Styling: colors/fonts/radii/shadows in `src/app/globals.css` (`@theme` tokens, minimal
   blue, subtle dot/blob background, dark mode via `.dark`). Shared class primitives in
   `src/components/ui.ts`; inline SVG icons in `src/components/icons.tsx`; theme helper
-  `src/lib/theme.ts`.
+  `src/lib/theme.ts`. Custom background (`src/lib/background.ts`) stores a compressed
+  image data URL + position/dim in the `settings` table (keys `backgroundImage`,
+  `backgroundPosition`, `backgroundDim`) and applies it to `document.body` on load
+  (`(app)/layout.tsx`); it is backup-safe and independent of light/dark theme.
 - Offline/PWA: `public/sw.js` (app-shell cache `dashboard-admin-v2`, network-first
   navigation) registered by `src/components/pwa-register.tsx` **only in secure contexts**
   (HTTPS/localhost), so LAN HTTP keeps working. `src/app/manifest.ts` provides the manifest.
@@ -68,6 +71,11 @@ After code changes, run `npm run restart` so the phone gets the update.
 - Owner: every page, including Dompet and Setting. Admin default: `beranda`, `pelanggan`, `stok`.
 - Permission keys: `beranda`, `pelanggan`, `stok`, `dompet`, `historis`, `setting`.
   `dompet` and `setting` are `ownerOnly` in `permissions.ts`.
+- Capability `delete_history` (`DELETE_HISTORY`, `canDeleteHistory`): owner always has it;
+  owner grants it to an admin by long-pressing the admin's name in Setting → Akun Pengguna.
+  In Histori, long-pressing a row enters multi-select (checkboxes + `Pilih semua`/`Hapus`).
+  Bulk `Reset Data` stays owner-only (Setting). `src/lib/repos/reset.ts` clears selected
+  tables atomically; deleting transactions does not restore stock.
 - First-run seed (`src/lib/seed.ts`): product "Sari Kedelai", owner ID `owner`, sandi `1234`.
   `ensureSeeded()` runs before the login screen.
 - `src/lib/pin.ts` (Web Crypto hash) is reused as the password hasher. `settings.pinHash`

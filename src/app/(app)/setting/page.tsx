@@ -1,13 +1,14 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from "react";
 import { IconDownload } from "@/components/icons";
 import { useToast } from "@/components/toast";
 import {
   badgeClass,
   buttonClass,
   cardClass,
+  dangerButtonClass,
   inputClass,
   sectionLabelClass,
   secondaryButtonClass,
@@ -36,7 +37,18 @@ import {
 } from "@/lib/repos/products";
 import { getSettings, updateSettings, type ThemeMode } from "@/lib/settings";
 import { applyTheme, readCachedTheme, syncThemeClass } from "@/lib/theme";
-import type { Product, ProductVariant } from "@/lib/types";
+import { DELETE_HISTORY } from "@/lib/permissions";
+import { resetData } from "@/lib/repos/reset";
+import {
+  DEFAULT_BACKGROUND,
+  applyBackground,
+  clampDim,
+  clearBackground,
+  compressImage,
+  getBackground,
+  setBackground,
+} from "@/lib/background";
+import type { Product, ProductVariant, User } from "@/lib/types";
 
 export default function SettingPage() {
   const toast = useToast();
@@ -106,6 +118,8 @@ export default function SettingPage() {
       <PinSection />
 
       <AccountsSection />
+
+      <ResetSection />
 
       <section className={cardClass}>
         <h2 className={sectionLabelClass}>Backup data</h2>
@@ -280,6 +294,8 @@ const AUDIT_LABELS: Record<string, string> = {
   create_expense: "Pengeluaran baru",
   delete_expense: "Hapus pengeluaran",
   record_payment: "Terima pembayaran",
+  delete_transactions: "Hapus riwayat",
+  reset_data: "Reset data",
 };
 
 function AuditSection() {
@@ -580,6 +596,11 @@ function AppearanceSection({
 }) {
   const toast = useToast();
   const [selected, setSelected] = useState<ThemeMode>(theme);
+  const [bgDataUrl, setBgDataUrl] = useState<string | null>(null);
+  const [bgPosition, setBgPosition] = useState(DEFAULT_BACKGROUND.position);
+  const [bgDim, setBgDim] = useState(DEFAULT_BACKGROUND.dim);
+  const [bgBusy, setBgBusy] = useState(false);
+  const previewRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!loaded) return;
@@ -597,11 +618,62 @@ function AppearanceSection({
     return () => media.removeEventListener("change", onChange);
   }, []);
 
+  useEffect(() => {
+    getBackground().then((config) => {
+      setBgDataUrl(config.dataUrl);
+      setBgPosition(config.position);
+      setBgDim(config.dim);
+    });
+  }, []);
+
   async function choose(next: ThemeMode) {
     setSelected(next);
     applyTheme(next);
     await updateSettings({ theme: next });
     toast("Tampilan diperbarui");
+  }
+
+  async function handlePickImage(file: File) {
+    setBgBusy(true);
+    try {
+      const dataUrl = await compressImage(file);
+      setBgDataUrl(dataUrl);
+      toast("Gambar siap. Atur posisi lalu simpan.");
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Gagal memuat gambar",
+        "error",
+      );
+    } finally {
+      setBgBusy(false);
+    }
+  }
+
+  async function handleSaveBackground() {
+    if (!bgDataUrl) return;
+    await setBackground(bgDataUrl, bgPosition, bgDim);
+    applyBackground({ dataUrl: bgDataUrl, position: bgPosition, dim: bgDim });
+    toast("Background disimpan");
+  }
+
+  async function handleClearBackground() {
+    await clearBackground();
+    applyBackground(DEFAULT_BACKGROUND);
+    setBgDataUrl(null);
+    setBgPosition(DEFAULT_BACKGROUND.position);
+    setBgDim(DEFAULT_BACKGROUND.dim);
+    toast("Background dihapus");
+  }
+
+  function handlePreviewPointer(event: PointerEvent<HTMLDivElement>) {
+    if (event.buttons !== 1) return;
+    const rect = previewRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = Math.round(((event.clientX - rect.left) / rect.width) * 100);
+    const y = Math.round(((event.clientY - rect.top) / rect.height) * 100);
+    setBgPosition(
+      `${Math.min(100, Math.max(0, x))}% ${Math.min(100, Math.max(0, y))}%`,
+    );
   }
 
   return (
@@ -625,6 +697,78 @@ function AppearanceSection({
             {option.label}
           </button>
         ))}
+      </div>
+
+      <div className="mt-4 border-t border-line pt-3">
+        <h3 className="text-xs font-extrabold uppercase tracking-wider text-ink-soft">
+          Background
+        </h3>
+        <p className="mt-1 text-[11px] text-ink-soft">
+          Ganti latar aplikasi dengan foto dari galeri. Warna kartu dan tema
+          tetap sama.
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <label className={`${secondaryButtonClass} cursor-pointer`}>
+            {bgBusy ? "Memuat..." : bgDataUrl ? "Ganti gambar" : "Pilih gambar"}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) handlePickImage(file);
+              }}
+            />
+          </label>
+          {bgDataUrl && (
+            <button
+              type="button"
+              onClick={handleClearBackground}
+              className="text-[11px] font-bold text-error underline"
+            >
+              Hapus background
+            </button>
+          )}
+        </div>
+
+        {bgDataUrl && (
+          <div className="mt-3 flex flex-col gap-2">
+            <div
+              ref={previewRef}
+              onPointerDown={handlePreviewPointer}
+              onPointerMove={handlePreviewPointer}
+              className="h-40 w-full cursor-move touch-none rounded-control border border-line"
+              style={{
+                backgroundImage: `linear-gradient(rgba(0,0,0,${clampDim(bgDim)}), rgba(0,0,0,${clampDim(bgDim)})), url("${bgDataUrl}")`,
+                backgroundSize: "cover",
+                backgroundPosition: bgPosition,
+                backgroundRepeat: "no-repeat",
+              }}
+            />
+            <p className="text-[10px] text-ink-soft">
+              Geser gambar untuk mengatur posisi.
+            </p>
+            <label className="flex items-center gap-3 text-xs font-bold text-ink-soft">
+              Gelapkan
+              <input
+                type="range"
+                min={0}
+                max={70}
+                value={Math.round(bgDim * 100)}
+                onChange={(event) => setBgDim(Number(event.target.value) / 100)}
+                className="flex-1 accent-primary"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={handleSaveBackground}
+              className={buttonClass}
+            >
+              Simpan background
+            </button>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -859,6 +1003,117 @@ const PERMISSION_OPTIONS = [
   { value: "historis", label: "Histori" },
 ];
 
+function ResetSection() {
+  const toast = useToast();
+  const txCount = useLiveQuery(() => getDb().transactions.count(), [], 0);
+  const expenseCount = useLiveQuery(() => getDb().expenses.count(), [], 0);
+  const auditCount = useLiveQuery(() => getDb().auditLog.count(), [], 0);
+  const customerCount = useLiveQuery(() => getDb().customers.count(), [], 0);
+
+  const [scope, setScope] = useState({
+    transactions: false,
+    expenses: false,
+    auditLog: false,
+    customers: false,
+    resetStock: false,
+  });
+  const [busy, setBusy] = useState(false);
+
+  const options: { key: keyof typeof scope; label: string; hint: string }[] = [
+    { key: "transactions", label: "Transaksi & item", hint: `${txCount} transaksi` },
+    { key: "expenses", label: "Pengeluaran", hint: `${expenseCount} catatan` },
+    { key: "auditLog", label: "Riwayat aktivitas", hint: `${auditCount} entri` },
+    { key: "customers", label: "Pelanggan", hint: `${customerCount} pelanggan` },
+    { key: "resetStock", label: "Reset stok ke 0", hint: "semua varian" },
+  ];
+  const nothingSelected = !Object.values(scope).some(Boolean);
+
+  async function handleReset() {
+    if (nothingSelected) {
+      toast("Pilih minimal satu data", "error");
+      return;
+    }
+    const answer = window.prompt(
+      "Ketik HAPUS untuk menghapus data terpilih secara permanen:",
+    );
+    if (answer !== "HAPUS") return;
+    setBusy(true);
+    try {
+      await resetData(scope);
+      setScope({
+        transactions: false,
+        expenses: false,
+        auditLog: false,
+        customers: false,
+        resetStock: false,
+      });
+      toast("Data terpilih dihapus");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Gagal menghapus", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className={cardClass}>
+      <h2 className={sectionLabelClass}>Reset Data</h2>
+      <p className="mt-1 text-xs text-ink-soft">
+        Hapus riwayat untuk mulai bersih. Produk, pengaturan, dan akun tetap
+        aman. Tindakan ini permanen.
+      </p>
+      <ul className="mt-3 flex flex-col divide-y divide-line">
+        {options.map((option) => (
+          <li
+            key={option.key}
+            className="flex items-center justify-between gap-2 py-2"
+          >
+            <label className="flex items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={scope[option.key]}
+                onChange={(event) =>
+                  setScope((prev) => ({
+                    ...prev,
+                    [option.key]: event.target.checked,
+                  }))
+                }
+                className="h-4 w-4 accent-error"
+              />
+              <span>
+                <span className="font-bold">{option.label}</span>
+                <span className="block text-[11px] text-ink-soft">
+                  {option.hint}
+                </span>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={handleReset}
+          disabled={busy || nothingSelected}
+          className={dangerButtonClass}
+        >
+          Hapus data terpilih
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            await downloadBackup();
+            toast("Backup diunduh");
+          }}
+          className={secondaryButtonClass}
+        >
+          Unduh backup dulu
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function AccountsSection() {
   const toast = useToast();
   const users = useLiveQuery(() => getDb().users.toArray(), [], []);
@@ -868,12 +1123,45 @@ function AccountsSection() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"owner" | "admin">("admin");
+  const [grantFor, setGrantFor] = useState<User | null>(null);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function startHold(user: User) {
+    if (user.role !== "admin") return;
+    holdTimer.current = setTimeout(() => setGrantFor(user), 600);
+  }
+
+  function cancelHold() {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+  }
+
+  function toggleDeleteHistory(user: User) {
+    const has = user.permissions.includes(DELETE_HISTORY);
+    const next = has
+      ? user.permissions.filter((permission) => permission !== DELETE_HISTORY)
+      : [...user.permissions, DELETE_HISTORY];
+    run(
+      () => updateUser(user.id, { permissions: next }),
+      has ? "Akses hapus riwayat dicabut" : "Akses hapus riwayat diberikan",
+    );
+    setGrantFor(null);
+  }
 
   useEffect(() => {
     const session = getSession();
     setIsOwner(session?.role === "owner");
     setCurrentId(session?.userId ?? null);
   }, []);
+
+  useEffect(
+    () => () => {
+      if (holdTimer.current) clearTimeout(holdTimer.current);
+    },
+    [],
+  );
 
   async function run(action: () => Promise<void>, success: string) {
     try {
@@ -904,7 +1192,8 @@ function AccountsSection() {
       </div>
       <p className="mt-1 text-xs text-ink-soft">
         Owner bisa akses semua halaman. Admin hanya halaman yang dicentang.
-        Minimal satu owner aktif harus tetap ada.
+        Minimal satu owner aktif harus tetap ada. Tahan nama admin untuk memberi
+        akses hapus riwayat.
       </p>
 
       {showForm && (
@@ -972,14 +1261,24 @@ function AccountsSection() {
           return (
             <li key={user.id} className="py-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm">
-                  <span className="font-bold">
+                <span
+                  className="text-sm"
+                  onPointerDown={() => startHold(user)}
+                  onPointerUp={cancelHold}
+                  onPointerLeave={cancelHold}
+                  onPointerCancel={cancelHold}
+                  onContextMenu={(event) => event.preventDefault()}
+                >
+                  <span className="select-none font-bold">
                     {user.username}
                     {self ? " (kamu)" : ""}
                   </span>
                   <span className="block text-[11px] text-ink-soft">
                     {user.role === "owner" ? "Owner" : "Admin"}
                     {user.active ? "" : " · nonaktif"}
+                    {user.permissions.includes(DELETE_HISTORY)
+                      ? " · bisa hapus riwayat"
+                      : ""}
                   </span>
                 </span>
                 <span className="flex shrink-0 items-center gap-2">
@@ -1061,6 +1360,41 @@ function AccountsSection() {
           );
         })}
       </ul>
+
+      {grantFor && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4"
+          onClick={() => setGrantFor(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-card border-2 border-ink bg-surface p-4 shadow-card"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <p className="text-sm font-extrabold">{grantFor.username}</p>
+            <p className="mt-1 text-xs text-ink-soft">
+              Izinkan akun ini menghapus riwayat transaksi?
+            </p>
+            <div className="mt-3 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => toggleDeleteHistory(grantFor)}
+                className={buttonClass}
+              >
+                {grantFor.permissions.includes(DELETE_HISTORY)
+                  ? "Cabut akses hapus riwayat"
+                  : "Beri akses hapus riwayat"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setGrantFor(null)}
+                className={secondaryButtonClass}
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

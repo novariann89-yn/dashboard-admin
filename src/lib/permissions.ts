@@ -60,3 +60,11 @@ export function visiblePages(session: AccessSession | null): PageDef[] {
     return session.permissions.includes(page.key);
   });
 }
+
+export const DELETE_HISTORY = "delete_history";
+
+export function canDeleteHistory(session: AccessSession | null): boolean {
+  if (!session) return false;
+  if (session.role === "owner") return true;
+  return session.permissions.includes(DELETE_HISTORY);
+}
