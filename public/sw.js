@@ -1,4 +1,4 @@
-const CACHE = "dashboard-admin-v2";
+const CACHE = "dashboard-admin-v3";
 
 const APP_SHELL = [
   "/",
@@ -8,7 +8,6 @@ const APP_SHELL = [
   "/stok",
   "/laporan",
   "/setting",
-  "/manifest.webmanifest",
   "/icon.svg",
 ];
 
@@ -40,6 +39,19 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  if (url.pathname === "/manifest.webmanifest") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(request, copy));
+          return response;
+        })
+        .catch(async () => (await caches.match(request)) ?? Response.error()),
+    );
+    return;
+  }
 
   if (request.mode === "navigate") {
     event.respondWith(

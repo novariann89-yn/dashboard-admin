@@ -57,7 +57,7 @@ After code changes, run `npm run restart` so the phone gets the update.
   image data URL + position/dim in the `settings` table (keys `backgroundImage`,
   `backgroundPosition`, `backgroundDim`) and applies it to `document.body` on load
   (`(app)/layout.tsx`); it is backup-safe and independent of light/dark theme.
-- Offline/PWA: `public/sw.js` (app-shell cache `dashboard-admin-v2`, network-first
+- Offline/PWA: `public/sw.js` (app-shell cache `dashboard-admin-v3`, network-first
   navigation) registered by `src/components/pwa-register.tsx` **only in secure contexts**
   (HTTPS/localhost), so LAN HTTP keeps working. `src/app/manifest.ts` provides the manifest.
 - `src/lib/backup.ts` — JSON export/import across **all** Dexie tables; restore clears the
