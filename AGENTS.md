@@ -73,9 +73,10 @@ After code changes, run `npm run restart` so the phone gets the update.
   `dompet` and `setting` are `ownerOnly` in `permissions.ts`.
 - Capability `delete_history` (`DELETE_HISTORY`, `canDeleteHistory`): owner always has it;
   owner grants it to an admin by long-pressing the admin's name in Setting → Akun Pengguna.
-  In Histori, long-pressing a row enters multi-select (checkboxes + `Pilih semua`/`Hapus`).
-  Bulk `Reset Data` stays owner-only (Setting). `src/lib/repos/reset.ts` clears selected
-  tables atomically; deleting transactions does not restore stock.
+  Long-press multi-select (shared `src/lib/use-multi-select.ts`) deletes history rows in
+  Histori and customers in Pelanggan. Bulk `Reset Data` stays owner-only (Setting).
+  `src/lib/repos/reset.ts` clears selected tables atomically; deleting transactions does
+  not restore stock, deleting a customer leaves its transactions (customerName snapshot).
 - First-run seed (`src/lib/seed.ts`): product "Sari Kedelai", owner ID `owner`, sandi `1234`.
   `ensureSeeded()` runs before the login screen.
 - `src/lib/pin.ts` (Web Crypto hash) is reused as the password hasher. `settings.pinHash`
@@ -117,7 +118,8 @@ After code changes, run `npm run restart` so the phone gets the update.
 - Implemented: login + roles + permission enforcement/nav guard, Beranda product-selection
   cart flow, minimal blue theme, Dompet, Histori, Stok (restock + set exact), PWA/offline
   app-shell, backup/restore, revision-2 Settings (store name, owner account/sandi, admin
-  accounts + permissions, per-variant profit, expense presets).
+  accounts + permissions, per-variant profit, expense presets, product/variant delete
+  (owner-only, cascades variants; Histori unaffected — items snapshot product name/price)).
 - Full offline install requires HTTPS (Vercel or local certs); LAN HTTP works but is not
   installable. `vercel.json` relies on Vercel auto-detecting the Next.js static export
   (`output: "export"` → `out/`); do not set `outputDirectory` (pointing it at `out`/`.next`

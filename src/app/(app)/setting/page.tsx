@@ -30,6 +30,8 @@ import { hashPin, isValidPin, randomSalt, verifyPin } from "@/lib/pin";
 import {
   createProduct,
   createVariant,
+  deleteProduct,
+  deleteVariant,
   listProducts,
   listVariants,
   updateProduct,
@@ -295,6 +297,9 @@ const AUDIT_LABELS: Record<string, string> = {
   delete_expense: "Hapus pengeluaran",
   record_payment: "Terima pembayaran",
   delete_transactions: "Hapus riwayat",
+  delete_customers: "Hapus pelanggan",
+  delete_product: "Hapus produk",
+  delete_variant: "Hapus varian",
   reset_data: "Reset data",
 };
 
@@ -390,6 +395,22 @@ function ProductBlock({
             className="text-[11px] font-bold text-ink-soft underline"
           >
             {product.active ? "Nonaktifkan" : "Aktifkan"}
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              if (
+                !window.confirm(
+                  `Hapus produk "${product.name}" beserta ${variants.length} varian? Tindakan ini permanen.`,
+                )
+              )
+                return;
+              await deleteProduct(product.id);
+              toast("Produk dihapus");
+            }}
+            className="text-[11px] font-bold text-error underline"
+          >
+            Hapus
           </button>
         </div>
       </div>
@@ -509,6 +530,22 @@ function VariantEditor({ variant }: { variant: ProductVariant }) {
           className="shrink-0 text-[11px] font-bold text-ink-soft underline"
         >
           {variant.active ? "Nonaktifkan" : "Aktifkan"}
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            if (
+              !window.confirm(
+                `Hapus varian "${variant.sizeName}"? Tindakan ini permanen.`,
+              )
+            )
+              return;
+            await deleteVariant(variant.id);
+            toast("Varian dihapus");
+          }}
+          className="shrink-0 text-[11px] font-bold text-error underline"
+        >
+          Hapus
         </button>
       </div>
 

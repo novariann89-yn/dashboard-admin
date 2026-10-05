@@ -1,7 +1,7 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { PeriodPicker, type PeriodValue } from "@/components/period-picker";
 import {
   buttonClass,
@@ -19,6 +19,7 @@ import { formatDateTime, rupiah } from "@/lib/format";
 import { getSession } from "@/lib/auth";
 import { canDeleteHistory } from "@/lib/permissions";
 import { deleteTransactions } from "@/lib/repos/transactions";
+import { useMultiSelect } from "@/lib/use-multi-select";
 
 export default function LaporanPage() {
   const toast = useToast();
@@ -29,75 +30,10 @@ export default function LaporanPage() {
   const [periodValue, setPeriodValue] = useState<PeriodValue>({
     preset: "today",
   });
-  const [selectMode, setSelectMode] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const suppressClick = useRef(false);
 
   useEffect(() => {
     setCanDelete(canDeleteHistory(getSession()));
   }, []);
-
-  useEffect(() => {
-    setSelected(new Set());
-    setSelectMode(false);
-  }, [periodValue]);
-
-  useEffect(
-    () => () => {
-      if (holdTimer.current) clearTimeout(holdTimer.current);
-    },
-    [],
-  );
-
-  function startHold(id: string) {
-    holdTimer.current = setTimeout(() => {
-      holdTimer.current = null;
-      suppressClick.current = true;
-      setSelectMode(true);
-      setSelected(new Set([id]));
-      window.setTimeout(() => {
-        suppressClick.current = false;
-      }, 500);
-    }, 600);
-  }
-
-  function cancelHold() {
-    if (holdTimer.current) {
-      clearTimeout(holdTimer.current);
-      holdTimer.current = null;
-    }
-  }
-
-  function toggleSelect(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function handleRowClick(id: string) {
-    if (suppressClick.current) {
-      suppressClick.current = false;
-      return;
-    }
-    toggleSelect(id);
-  }
-
-  async function deleteSelected() {
-    const ids = Array.from(selected);
-    if (ids.length === 0) return;
-    const answer = window.prompt(
-      `Ketik HAPUS untuk menghapus ${ids.length} transaksi (stok tidak dikembalikan):`,
-    );
-    if (answer !== "HAPUS") return;
-    await deleteTransactions(ids);
-    toast(`${ids.length} transaksi dihapus`);
-    setSelected(new Set());
-    setSelectMode(false);
-  }
 
   const period = resolvePeriod(periodValue.preset, periodValue.day);
 
@@ -110,9 +46,27 @@ export default function LaporanPage() {
     )
     .sort((a, b) => b.occurredAt - a.occurredAt);
 
-  const allSelected =
-    periodTransactions.length > 0 &&
-    selected.size === periodTransactions.length;
+  const selection = useMultiSelect(
+    periodTransactions.map((transaction) => transaction.id),
+    canDelete,
+  );
+
+  useEffect(() => {
+    selection.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodValue]);
+
+  async function deleteSelected() {
+    const ids = Array.from(selection.selected);
+    if (ids.length === 0) return;
+    const answer = window.prompt(
+      `Ketik HAPUS untuk menghapus ${ids.length} transaksi (stok tidak dikembalikan):`,
+    );
+    if (answer !== "HAPUS") return;
+    await deleteTransactions(ids);
+    toast(`${ids.length} transaksi dihapus`);
+    selection.clear();
+  }
 
   function exportHistoris() {
     ;(async () => {
@@ -154,36 +108,21 @@ export default function LaporanPage() {
       <section className={cardClass}>
         <h2 className={sectionLabelClass}>Riwayat Transaksi · {period.label}</h2>
 
-        {canDelete && !selectMode && periodTransactions.length > 0 && (
-          <p className="mt-1 text-[11px] text-ink-soft">
-            Tahan riwayat untuk memilih &amp; hapus.
-          </p>
-        )}
-
-        {selectMode && (
+        {selection.selectMode && (
           <div className="no-print mt-2 flex flex-wrap items-center gap-2 rounded-control border border-line bg-canvas p-2">
             <span className="text-xs font-bold tabular-nums">
-              {selected.size} dipilih
+              {selection.selected.size} dipilih
             </span>
             <button
               type="button"
-              onClick={() =>
-                setSelected(
-                  allSelected
-                    ? new Set()
-                    : new Set(periodTransactions.map((transaction) => transaction.id)),
-                )
-              }
+              onClick={selection.toggleAll}
               className={smallButtonClass}
             >
-              {allSelected ? "Kosongkan" : "Pilih semua"}
+              {selection.allSelected ? "Kosongkan" : "Pilih semua"}
             </button>
             <button
               type="button"
-              onClick={() => {
-                setSelected(new Set());
-                setSelectMode(false);
-              }}
+              onClick={selection.clear}
               className={smallButtonClass}
             >
               Batal
@@ -191,7 +130,7 @@ export default function LaporanPage() {
             <button
               type="button"
               onClick={deleteSelected}
-              disabled={selected.size === 0}
+              disabled={selection.nothingSelected}
               className={`${dangerButtonClass} ml-auto`}
             >
               Hapus
@@ -199,35 +138,35 @@ export default function LaporanPage() {
           </div>
         )}
 
+        {canDelete && !selection.selectMode && periodTransactions.length > 0 && (
+          <p className="mt-1 text-[11px] text-ink-soft">
+            Tahan riwayat untuk memilih &amp; hapus.
+          </p>
+        )}
+
         {periodTransactions.length === 0 ? (
           <p className="mt-2 text-sm text-ink-soft">Belum ada transaksi.</p>
         ) : (
           <ul className="mt-1 flex flex-col divide-y divide-line">
             {periodTransactions.map((transaction) => {
-              const isSelected = selected.has(transaction.id);
+              const isSelected = selection.selected.has(transaction.id);
               return (
                 <li
                   key={transaction.id}
-                  onPointerDown={
-                    canDelete && !selectMode
-                      ? () => startHold(transaction.id)
-                      : undefined
-                  }
-                  onPointerUp={cancelHold}
-                  onPointerLeave={cancelHold}
-                  onPointerCancel={cancelHold}
+                  onPointerDown={() => selection.startHold(transaction.id)}
+                  onPointerUp={selection.cancelHold}
+                  onPointerLeave={selection.cancelHold}
+                  onPointerCancel={selection.cancelHold}
                   onContextMenu={(event) => event.preventDefault()}
-                  onClick={
-                    selectMode
-                      ? () => handleRowClick(transaction.id)
-                      : undefined
-                  }
+                  onClick={() => {
+                    selection.handleClick(transaction.id);
+                  }}
                   className={`flex items-center justify-between gap-2 py-2.5 ${
-                    selectMode ? "cursor-pointer" : ""
+                    selection.selectMode ? "cursor-pointer" : ""
                   } ${isSelected ? "bg-primary/5" : ""}`}
                 >
                   <span className="flex items-center gap-2 text-sm">
-                    {selectMode && (
+                    {selection.selectMode && (
                       <input
                         type="checkbox"
                         checked={isSelected}

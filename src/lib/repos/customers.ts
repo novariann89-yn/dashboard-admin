@@ -3,6 +3,7 @@ import { newId } from "../id";
 import { normalizeName, normalizePhone, searchCustomers } from "../search";
 import type { Customer, BuyerType } from "../types";
 import { listVariantsWithProduct } from "./products";
+import { logAudit } from "./audit";
 
 export async function createCustomer(input: {
   name: string;
@@ -63,6 +64,24 @@ export async function updateCustomer(
 
 export async function getCustomer(id: string): Promise<Customer | undefined> {
   return getDb().customers.get(id);
+}
+
+export async function deleteCustomers(ids: string[]): Promise<void> {
+  const unique = Array.from(new Set(ids));
+  if (unique.length === 0) return;
+
+  const db = getDb();
+  const rows = await db.customers.bulkGet(unique);
+  const found = unique.filter((id, index) => rows[index]);
+
+  if (found.length === 0) return;
+
+  await db.customers.bulkDelete(found);
+  await logAudit({
+    action: "delete_customers",
+    table: "customers",
+    newData: { count: found.length },
+  });
 }
 
 export async function listCustomers(type?: BuyerType): Promise<Customer[]> {

@@ -2,25 +2,31 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/components/toast";
 import {
   badgeClass,
   buttonClass,
   cardClass,
+  dangerButtonClass,
   inputClass,
   sectionLabelClass,
+  smallButtonClass,
 } from "@/components/ui";
 import { getDb } from "@/lib/db";
 import { formatDate, rupiah } from "@/lib/format";
 import {
   createCustomer,
+  deleteCustomers,
   listCustomers,
   updateCustomer,
 } from "@/lib/repos/customers";
 import { listVariantsWithProduct, profitPerUnit } from "@/lib/repos/products";
 import { formatPhone, searchCustomers } from "@/lib/search";
 import { useDebouncedValue } from "@/lib/use-debounced";
+import { getSession } from "@/lib/auth";
+import { canDeleteHistory } from "@/lib/permissions";
+import { useMultiSelect } from "@/lib/use-multi-select";
 import type { BuyerType, Customer, Transaction } from "@/lib/types";
 
 export default function PelangganPage() {
@@ -84,6 +90,35 @@ export default function PelangganPage() {
 
   const selected = customers.find((customer) => customer.id === selectedId) ?? null;
 
+  const [canDelete, setCanDelete] = useState(false);
+
+  useEffect(() => {
+    setCanDelete(canDeleteHistory(getSession()));
+  }, []);
+
+  const selection = useMultiSelect(
+    rows.map((customer) => customer.id),
+    canDelete,
+  );
+
+  useEffect(() => {
+    selection.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  async function handleDeleteSelected() {
+    const ids = Array.from(selection.selected);
+    if (ids.length === 0) return;
+    const answer = window.prompt(
+      `Ketik HAPUS untuk menghapus ${ids.length} pelanggan:`,
+    );
+    if (answer !== "HAPUS") return;
+    await deleteCustomers(ids);
+    if (selectedId && ids.includes(selectedId)) setSelectedId(null);
+    toast(`${ids.length} pelanggan dihapus`);
+    selection.clear();
+  }
+
   async function handleAdd() {
     try {
       const created = await createCustomer({
@@ -143,6 +178,42 @@ export default function PelangganPage() {
         </button>
       </div>
 
+      {selection.selectMode && (
+        <div className="no-print flex flex-wrap items-center gap-2 rounded-control border border-line bg-canvas p-2">
+          <span className="text-xs font-bold tabular-nums">
+            {selection.selected.size} dipilih
+          </span>
+          <button
+            type="button"
+            onClick={selection.toggleAll}
+            className={smallButtonClass}
+          >
+            {selection.allSelected ? "Kosongkan" : "Pilih semua"}
+          </button>
+          <button
+            type="button"
+            onClick={selection.clear}
+            className={smallButtonClass}
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteSelected}
+            disabled={selection.nothingSelected}
+            className={`${dangerButtonClass} ml-auto`}
+          >
+            Hapus
+          </button>
+        </div>
+      )}
+
+      {canDelete && !selection.selectMode && rows.length > 0 && (
+        <p className="text-[11px] text-ink-soft">
+          Tahan nama pelanggan untuk memilih &amp; hapus.
+        </p>
+      )}
+
       {showAdd && (
         <section className={cardClass}>
           <h2 className={sectionLabelClass}>
@@ -182,11 +253,30 @@ export default function PelangganPage() {
                 <li key={customer.id}>
                   <button
                     type="button"
-                    onClick={() =>
-                      setSelectedId(selectedId === customer.id ? null : customer.id)
-                    }
-                    className="flex w-full items-center justify-between gap-2 py-3 text-left"
+                    onPointerDown={() => selection.startHold(customer.id)}
+                    onPointerUp={selection.cancelHold}
+                    onPointerLeave={selection.cancelHold}
+                    onPointerCancel={selection.cancelHold}
+                    onContextMenu={(event) => event.preventDefault()}
+                    onClick={() => {
+                      if (selection.handleClick(customer.id)) return;
+                      setSelectedId(
+                        selectedId === customer.id ? null : customer.id,
+                      );
+                    }}
+                    className={`flex w-full items-center justify-between gap-2 py-3 text-left ${
+                      selection.selected.has(customer.id) ? "bg-primary/5" : ""
+                    }`}
                   >
+                    {selection.selectMode && (
+                      <input
+                        type="checkbox"
+                        checked={selection.selected.has(customer.id)}
+                        readOnly
+                        tabIndex={-1}
+                        className="pointer-events-none h-4 w-4 accent-error"
+                      />
+                    )}
                     <span className="text-sm">
                       <span className="font-bold">{customer.name}</span>
                       {!customer.active && (

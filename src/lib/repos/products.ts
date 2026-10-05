@@ -132,6 +132,43 @@ export async function updateVariant(
   await db.productVariants.update(id, next);
 }
 
+export async function deleteVariant(id: string): Promise<void> {
+  const db = getDb();
+  const existing = await db.productVariants.get(id);
+  if (!existing) return;
+
+  await db.productVariants.delete(id);
+  await logAudit({
+    action: "delete_variant",
+    table: "productVariants",
+    recordId: id,
+    oldData: { sizeName: existing.sizeName, sellPrice: existing.sellPrice },
+  });
+}
+
+export async function deleteProduct(id: string): Promise<void> {
+  const db = getDb();
+  const existing = await db.products.get(id);
+  if (!existing) return;
+
+  const variantIds = await db.productVariants
+    .where("productId")
+    .equals(id)
+    .primaryKeys();
+
+  await db.transaction("rw", [db.products, db.productVariants], async () => {
+    await db.productVariants.where("productId").equals(id).delete();
+    await db.products.delete(id);
+  });
+
+  await logAudit({
+    action: "delete_product",
+    table: "products",
+    recordId: id,
+    oldData: { name: existing.name, variantCount: variantIds.length },
+  });
+}
+
 export async function variantsWithMissingCost(): Promise<ProductVariant[]> {
   const variants = await listVariants(true);
   return variants.filter((variant) => variant.costPrice <= 0);
