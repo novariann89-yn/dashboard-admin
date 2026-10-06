@@ -14,13 +14,20 @@ import {
   smallButtonClass,
 } from "@/components/ui";
 import { getDb } from "@/lib/db";
-import { formatDate, rupiah } from "@/lib/format";
+import { formatDate, formatDateTime, rupiah } from "@/lib/format";
 import {
   createCustomer,
   deleteCustomers,
   listCustomers,
   updateCustomer,
 } from "@/lib/repos/customers";
+import {
+  claimReward,
+  deleteClaims,
+  getMemberLoyalty,
+  listClaims,
+  updateClaimNote,
+} from "@/lib/repos/loyalty";
 import { listVariantsWithProduct, profitPerUnit } from "@/lib/repos/products";
 import { formatPhone, searchCustomers } from "@/lib/search";
 import { useDebouncedValue } from "@/lib/use-debounced";
@@ -359,6 +366,50 @@ function CustomerDetail({
     0,
   );
 
+  const loyalty = useLiveQuery(
+    () => getMemberLoyalty(customer.id),
+    [customer.id],
+    [],
+  );
+  const claims = useLiveQuery(
+    () => listClaims(customer.id),
+    [customer.id],
+    [],
+  );
+  const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    setIsOwner(getSession()?.role === "owner");
+  }, []);
+
+  const claimSelection = useMultiSelect(
+    claims.map((claim) => claim.id),
+    isOwner,
+  );
+
+  async function handleClaim(
+    productId: string,
+    productName: string,
+    target: number,
+  ) {
+    if (!window.confirm(`Klaim hadiah "${productName}" (${target} pcs)?`)) return;
+    try {
+      await claimReward(customer.id, productId);
+      toast("Hadiah diklaim");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Gagal klaim", "error");
+    }
+  }
+
+  async function handleDeleteClaims() {
+    const ids = Array.from(claimSelection.selected);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Hapus ${ids.length} riwayat klaim?`)) return;
+    await deleteClaims(ids);
+    toast(`${ids.length} riwayat klaim dihapus`);
+    claimSelection.clear();
+  }
+
   async function handleSave() {
     try {
       await updateCustomer(customer.id, {
@@ -409,6 +460,134 @@ function CustomerDetail({
             );
           })}
         </ul>
+      )}
+
+      {loyalty.length > 0 && (
+        <div className="mt-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
+            Progres hadiah
+          </p>
+          <ul className="mt-1 flex flex-col gap-1">
+            {loyalty.map((row) => (
+              <li
+                key={row.productId}
+                className="flex items-center justify-between gap-2 text-xs"
+              >
+                <span className="font-bold">{row.productName}</span>
+                <span className="flex items-center gap-2 tabular-nums text-ink-soft">
+                  {row.remaining}/{row.target} pcs
+                  {isOwner && row.claimable > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleClaim(row.productId, row.productName, row.target)
+                      }
+                      className="font-bold text-success underline"
+                    >
+                      Klaim{row.claimable > 1 ? ` ×${row.claimable}` : ""}
+                    </button>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {claims.length > 0 && (
+        <div className="mt-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
+              Riwayat klaim
+            </p>
+            {isOwner && claimSelection.selectMode && (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold tabular-nums">
+                  {claimSelection.selected.size} dipilih
+                </span>
+                <button
+                  type="button"
+                  onClick={claimSelection.toggleAll}
+                  className="text-[10px] font-bold text-ink-soft underline"
+                >
+                  {claimSelection.allSelected ? "Kosongkan" : "Pilih semua"}
+                </button>
+                <button
+                  type="button"
+                  onClick={claimSelection.clear}
+                  className="text-[10px] font-bold text-ink-soft underline"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteClaims}
+                  disabled={claimSelection.nothingSelected}
+                  className="text-[10px] font-bold text-error underline disabled:opacity-40"
+                >
+                  Hapus
+                </button>
+              </div>
+            )}
+          </div>
+          <ul className="mt-1 flex flex-col divide-y divide-line">
+            {claims.map((claim) => {
+              const isSelected = claimSelection.selected.has(claim.id);
+              return (
+                <li
+                  key={claim.id}
+                  onPointerDown={() => claimSelection.startHold(claim.id)}
+                  onPointerUp={claimSelection.cancelHold}
+                  onPointerLeave={claimSelection.cancelHold}
+                  onPointerCancel={claimSelection.cancelHold}
+                  onContextMenu={(event) => event.preventDefault()}
+                  onClick={() => {
+                    claimSelection.handleClick(claim.id);
+                  }}
+                  className={`py-2 ${
+                    claimSelection.selectMode ? "cursor-pointer" : ""
+                  } ${isSelected ? "bg-primary/5" : ""}`}
+                >
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="flex items-center gap-2">
+                      {claimSelection.selectMode && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          readOnly
+                          tabIndex={-1}
+                          className="pointer-events-none h-3.5 w-3.5 accent-error"
+                        />
+                      )}
+                      <span className="font-bold">{claim.productName}</span>
+                      <span className="tabular-nums text-ink-soft">
+                        {claim.claimedQty} pcs
+                      </span>
+                    </span>
+                    <span className="tabular-nums text-ink-soft">
+                      {formatDateTime(claim.claimedAt)}
+                    </span>
+                  </div>
+                  <input
+                    defaultValue={claim.note ?? ""}
+                    onBlur={(event) => {
+                      if (event.target.value.trim() !== (claim.note ?? "")) {
+                        void updateClaimNote(claim.id, event.target.value);
+                      }
+                    }}
+                    placeholder="Hadiah (opsional)"
+                    className="mt-1 w-full rounded-control border border-line bg-surface px-2 py-1 text-[11px]"
+                  />
+                </li>
+              );
+            })}
+          </ul>
+          {isOwner && !claimSelection.selectMode && (
+            <p className="mt-1 text-[10px] text-ink-soft">
+              Tahan riwayat untuk memilih &amp; hapus.
+            </p>
+          )}
+        </div>
       )}
 
       <div className="mt-3 flex flex-col gap-2">

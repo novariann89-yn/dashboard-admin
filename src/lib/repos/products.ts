@@ -58,7 +58,7 @@ export async function createProduct(input: {
 
 export async function updateProduct(
   id: string,
-  patch: Partial<Pick<Product, "name" | "emoji" | "active" | "sortOrder">>,
+  patch: Partial<Pick<Product, "name" | "emoji" | "active" | "sortOrder" | "loyaltyTarget">>,
 ): Promise<void> {
   await getDb().products.update(id, patch);
 }

@@ -103,6 +103,7 @@ export async function createTransaction(
     id: newId(),
     transactionId: transaction.id,
     variantId: line.variant.id,
+    productId: line.variant.productId,
     productName: line.productName,
     sizeName: line.variant.sizeName,
     qty: line.qty,

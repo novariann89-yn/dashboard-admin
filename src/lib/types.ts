@@ -22,6 +22,7 @@ export interface Product {
   active: boolean;
   sortOrder: number;
   createdAt: number;
+  loyaltyTarget?: number;
 }
 
 export interface ProductVariant {
@@ -64,12 +65,24 @@ export interface TransactionItem {
   id: ID;
   transactionId: ID;
   variantId: ID;
+  productId?: ID;
   productName: string;
   sizeName: string;
   qty: number;
   unitPrice: number;
   unitCost: number;
   netProfitSnapshot: number;
+}
+
+export interface LoyaltyClaim {
+  id: ID;
+  customerId: ID;
+  productId: ID;
+  productName: string;
+  claimedAt: number;
+  claimedQty: number;
+  target: number;
+  note: string | null;
 }
 
 export interface Expense {

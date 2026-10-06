@@ -76,7 +76,10 @@ export async function deleteCustomers(ids: string[]): Promise<void> {
 
   if (found.length === 0) return;
 
-  await db.customers.bulkDelete(found);
+  await db.transaction("rw", [db.customers, db.loyaltyClaims], async () => {
+    await db.loyaltyClaims.where("customerId").anyOf(found).delete();
+    await db.customers.bulkDelete(found);
+  });
   await logAudit({
     action: "delete_customers",
     table: "customers",

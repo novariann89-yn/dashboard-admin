@@ -6,6 +6,7 @@ export interface ResetScope {
   expenses?: boolean;
   auditLog?: boolean;
   customers?: boolean;
+  loyaltyClaims?: boolean;
   resetStock?: boolean;
 }
 
@@ -22,6 +23,7 @@ export async function resetData(scope: ResetScope): Promise<void> {
       db.expenses,
       db.auditLog,
       db.customers,
+      db.loyaltyClaims,
       db.productVariants,
     ],
     async () => {
@@ -31,7 +33,11 @@ export async function resetData(scope: ResetScope): Promise<void> {
       }
       if (scope.expenses) await db.expenses.clear();
       if (scope.auditLog) await db.auditLog.clear();
-      if (scope.customers) await db.customers.clear();
+      if (scope.customers) {
+        await db.customers.clear();
+        await db.loyaltyClaims.clear();
+      }
+      if (scope.loyaltyClaims) await db.loyaltyClaims.clear();
       if (scope.resetStock) {
         await db.productVariants.toCollection().modify({ stock: 0 });
       }

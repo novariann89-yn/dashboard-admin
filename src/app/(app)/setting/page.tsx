@@ -300,6 +300,8 @@ const AUDIT_LABELS: Record<string, string> = {
   delete_customers: "Hapus pelanggan",
   delete_product: "Hapus produk",
   delete_variant: "Hapus varian",
+  claim_reward: "Klaim hadiah",
+  delete_claims: "Hapus riwayat klaim",
   reset_data: "Reset data",
 };
 
@@ -374,6 +376,7 @@ function ProductBlock({
 }) {
   const toast = useToast();
   const [showVariantForm, setShowVariantForm] = useState(false);
+  const [target, setTarget] = useState(product.loyaltyTarget ?? 0);
 
   return (
     <div className="rounded-control border-2 border-line bg-surface p-3">
@@ -413,6 +416,29 @@ function ProductBlock({
             Hapus
           </button>
         </div>
+      </div>
+
+      <div className="mt-2 flex items-center gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-ink-soft">
+          Target hadiah (pcs)
+        </span>
+        <input
+          value={target || ""}
+          onChange={(event) => setTarget(Number(event.target.value) || 0)}
+          inputMode="numeric"
+          placeholder="0"
+          className="w-16 rounded-control border border-line bg-surface px-2 py-1 text-right text-xs tabular-nums"
+        />
+        <button
+          type="button"
+          onClick={async () => {
+            await updateProduct(product.id, { loyaltyTarget: Math.max(0, target) });
+            toast("Target hadiah disimpan");
+          }}
+          className="text-[11px] font-bold text-ink-soft underline"
+        >
+          Simpan
+        </button>
       </div>
 
       <div className="mt-3 flex flex-col gap-3">
@@ -1046,12 +1072,14 @@ function ResetSection() {
   const expenseCount = useLiveQuery(() => getDb().expenses.count(), [], 0);
   const auditCount = useLiveQuery(() => getDb().auditLog.count(), [], 0);
   const customerCount = useLiveQuery(() => getDb().customers.count(), [], 0);
+  const claimCount = useLiveQuery(() => getDb().loyaltyClaims.count(), [], 0);
 
   const [scope, setScope] = useState({
     transactions: false,
     expenses: false,
     auditLog: false,
     customers: false,
+    loyaltyClaims: false,
     resetStock: false,
   });
   const [busy, setBusy] = useState(false);
@@ -1061,6 +1089,7 @@ function ResetSection() {
     { key: "expenses", label: "Pengeluaran", hint: `${expenseCount} catatan` },
     { key: "auditLog", label: "Riwayat aktivitas", hint: `${auditCount} entri` },
     { key: "customers", label: "Pelanggan", hint: `${customerCount} pelanggan` },
+    { key: "loyaltyClaims", label: "Riwayat klaim", hint: `${claimCount} klaim` },
     { key: "resetStock", label: "Reset stok ke 0", hint: "semua varian" },
   ];
   const nothingSelected = !Object.values(scope).some(Boolean);
@@ -1082,6 +1111,7 @@ function ResetSection() {
         expenses: false,
         auditLog: false,
         customers: false,
+        loyaltyClaims: false,
         resetStock: false,
       });
       toast("Data terpilih dihapus");
