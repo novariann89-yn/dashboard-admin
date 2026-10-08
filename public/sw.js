@@ -8,7 +8,7 @@ const APP_SHELL = [
   "/stok",
   "/laporan",
   "/setting",
-  "/icon.svg",
+  "/icons/icon-192.png",
 ];
 
 self.addEventListener("install", (event) => {

@@ -19,17 +19,22 @@ import { formatDateTime, rupiah } from "@/lib/format";
 import { getSession } from "@/lib/auth";
 import { canDeleteHistory } from "@/lib/permissions";
 import { deleteTransactions } from "@/lib/repos/transactions";
+import { buildReceiptText, whatsappUrl } from "@/lib/receipt";
 import { useMultiSelect } from "@/lib/use-multi-select";
+import type { Transaction } from "@/lib/types";
 
 export default function LaporanPage() {
   const toast = useToast();
   const transactions = useLiveQuery(() => getDb().transactions.toArray(), [], []);
+  const items = useLiveQuery(() => getDb().transactionItems.toArray(), [], []);
+  const customers = useLiveQuery(() => getDb().customers.toArray(), [], []);
   const expenses = useLiveQuery(() => getDb().expenses.toArray(), [], []);
 
   const [canDelete, setCanDelete] = useState(false);
   const [periodValue, setPeriodValue] = useState<PeriodValue>({
     preset: "today",
   });
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     setCanDelete(canDeleteHistory(getSession()));
@@ -53,8 +58,29 @@ export default function LaporanPage() {
 
   useEffect(() => {
     selection.clear();
+    setExpandedId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodValue]);
+
+  async function handleShare(transaction: Transaction) {
+    const transactionItems = items.filter(
+      (item) => item.transactionId === transaction.id,
+    );
+    let phone = "";
+    if (transaction.customerId) {
+      phone =
+        customers.find((customer) => customer.id === transaction.customerId)
+          ?.phoneNormal ?? "";
+    }
+    if (!phone) {
+      phone = window.prompt("Nomor HP tujuan (08xxx)") ?? "";
+      if (!phone.trim()) return;
+    }
+    window.open(
+      whatsappUrl(phone, buildReceiptText(transaction, transactionItems)),
+      "_blank",
+    );
+  }
 
   async function deleteSelected() {
     const ids = Array.from(selection.selected);
@@ -150,43 +176,121 @@ export default function LaporanPage() {
           <ul className="mt-1 flex flex-col divide-y divide-line">
             {periodTransactions.map((transaction) => {
               const isSelected = selection.selected.has(transaction.id);
+              const expanded =
+                expandedId === transaction.id && !selection.selectMode;
               return (
-                <li
-                  key={transaction.id}
-                  onPointerDown={() => selection.startHold(transaction.id)}
-                  onPointerUp={selection.cancelHold}
-                  onPointerLeave={selection.cancelHold}
-                  onPointerCancel={selection.cancelHold}
-                  onContextMenu={(event) => event.preventDefault()}
-                  onClick={() => {
-                    selection.handleClick(transaction.id);
-                  }}
-                  className={`flex items-center justify-between gap-2 py-2.5 ${
-                    selection.selectMode ? "cursor-pointer" : ""
-                  } ${isSelected ? "bg-primary/5" : ""}`}
-                >
-                  <span className="flex items-center gap-2 text-sm">
-                    {selection.selectMode && (
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        readOnly
-                        tabIndex={-1}
-                        className="pointer-events-none h-4 w-4 accent-error"
-                      />
-                    )}
-                    <span>
-                      <span className="font-bold">
-                        {formatDateTime(transaction.occurredAt)}
-                      </span>
-                      <span className="block text-xs tabular-nums text-ink-soft">
-                        Tunai
+                <li key={transaction.id}>
+                  <div
+                    onPointerDown={() => selection.startHold(transaction.id)}
+                    onPointerUp={selection.cancelHold}
+                    onPointerLeave={selection.cancelHold}
+                    onPointerCancel={selection.cancelHold}
+                    onContextMenu={(event) => event.preventDefault()}
+                    onClick={() => {
+                      if (selection.handleClick(transaction.id)) return;
+                      setExpandedId((prev) =>
+                        prev === transaction.id ? null : transaction.id,
+                      );
+                    }}
+                    className={`flex cursor-pointer items-center justify-between gap-2 py-2.5 ${
+                      isSelected ? "bg-primary/5" : ""
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 text-sm">
+                      {selection.selectMode && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          readOnly
+                          tabIndex={-1}
+                          className="pointer-events-none h-4 w-4 accent-error"
+                        />
+                      )}
+                      <span>
+                        <span className="font-bold">
+                          {formatDateTime(transaction.occurredAt)}
+                        </span>
+                        <span className="block text-xs tabular-nums text-ink-soft">
+                          Tunai
+                        </span>
                       </span>
                     </span>
-                  </span>
-                  <span className="block font-bold tabular-nums">
-                    {rupiah(transaction.finalTotal)}
-                  </span>
+                    <span className="flex items-center gap-2">
+                      <span className="block font-bold tabular-nums">
+                        {rupiah(transaction.finalTotal)}
+                      </span>
+                      {!selection.selectMode && (
+                        <span className="no-print text-ink-soft">
+                          {expanded ? "▾" : "▸"}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+
+                  {expanded && (
+                    <div className="mb-3 rounded-control border border-line bg-canvas p-3 text-xs">
+                      {transaction.buyerType === "member" &&
+                        transaction.customerName && (
+                          <p className="font-bold">
+                            Pembeli: {transaction.customerName}
+                          </p>
+                        )}
+                      <p className="text-ink-soft">
+                        {formatDateTime(transaction.occurredAt)}
+                      </p>
+
+                      <ul className="mt-2 flex flex-col gap-1">
+                        {items
+                          .filter(
+                            (item) => item.transactionId === transaction.id,
+                          )
+                          .map((item) => (
+                            <li
+                              key={item.id}
+                              className="flex items-center justify-between gap-2"
+                            >
+                              <span className="font-bold">
+                                {item.productName} {item.sizeName}
+                              </span>
+                              <span className="tabular-nums text-ink-soft">
+                                {item.qty} × {rupiah(item.unitPrice)} ={" "}
+                                {rupiah(item.qty * item.unitPrice)}
+                              </span>
+                            </li>
+                          ))}
+                      </ul>
+
+                      <div className="mt-2 border-t border-line pt-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-ink-soft">Subtotal</span>
+                          <span className="tabular-nums">
+                            {rupiah(transaction.subtotal)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between font-bold">
+                          <span>Total</span>
+                          <span className="tabular-nums">
+                            {rupiah(transaction.finalTotal)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-ink-soft">
+                          <span>Bayar</span>
+                          <span>Tunai</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-1 flex items-center justify-between text-[10px] text-ink-soft">
+                        <span>#{transaction.id.slice(0, 8)}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleShare(transaction)}
+                          className="no-print font-bold text-primary underline"
+                        >
+                          Bagikan struk (WhatsApp)
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </li>
               );
             })}

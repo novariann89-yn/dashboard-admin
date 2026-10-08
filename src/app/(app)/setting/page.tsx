@@ -377,45 +377,72 @@ function ProductBlock({
   const toast = useToast();
   const [showVariantForm, setShowVariantForm] = useState(false);
   const [target, setTarget] = useState(product.loyaltyTarget ?? 0);
+  const [name, setName] = useState(product.name);
+  const [emoji, setEmoji] = useState(product.emoji);
 
   return (
     <div className="rounded-control border-2 border-line bg-surface p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-extrabold">{product.name}</p>
-          <p className="text-[11px] text-ink-soft">{product.emoji}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={product.active ? statusActiveClass : badgeClass}>
-            {product.active ? "aktif" : "nonaktif"}
-          </span>
-          <button
-            type="button"
-            onClick={async () => {
-              await updateProduct(product.id, { active: !product.active });
-              toast("Produk diperbarui");
-            }}
-            className="text-[11px] font-bold text-ink-soft underline"
-          >
-            {product.active ? "Nonaktifkan" : "Aktifkan"}
-          </button>
-          <button
-            type="button"
-            onClick={async () => {
-              if (
-                !window.confirm(
-                  `Hapus produk "${product.name}" beserta ${variants.length} varian? Tindakan ini permanen.`,
-                )
+      <div className="flex items-center gap-1.5">
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Nama produk"
+          className="w-full rounded-control border border-line bg-surface px-2 py-1 text-sm font-extrabold"
+        />
+        <input
+          value={emoji}
+          onChange={(event) => setEmoji(event.target.value)}
+          className="w-11 shrink-0 rounded-control border border-line bg-surface px-1 py-1 text-center text-base"
+        />
+        <button
+          type="button"
+          onClick={async () => {
+            if (!name.trim()) {
+              toast("Nama produk wajib diisi", "error");
+              return;
+            }
+            await updateProduct(product.id, {
+              name: name.trim(),
+              emoji: emoji || "🥛",
+            });
+            toast("Produk disimpan");
+          }}
+          className="shrink-0 text-[11px] font-bold text-ink-soft underline"
+        >
+          Simpan
+        </button>
+      </div>
+
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        <span className={product.active ? statusActiveClass : badgeClass}>
+          {product.active ? "aktif" : "nonaktif"}
+        </span>
+        <button
+          type="button"
+          onClick={async () => {
+            await updateProduct(product.id, { active: !product.active });
+            toast("Produk diperbarui");
+          }}
+          className="text-[11px] font-bold text-ink-soft underline"
+        >
+          {product.active ? "Nonaktifkan" : "Aktifkan"}
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            if (
+              !window.confirm(
+                `Hapus produk "${product.name}" beserta ${variants.length} varian? Tindakan ini permanen.`,
               )
-                return;
-              await deleteProduct(product.id);
-              toast("Produk dihapus");
-            }}
-            className="text-[11px] font-bold text-error underline"
-          >
-            Hapus
-          </button>
-        </div>
+            )
+              return;
+            await deleteProduct(product.id);
+            toast("Produk dihapus");
+          }}
+          className="text-[11px] font-bold text-error underline"
+        >
+          Hapus
+        </button>
       </div>
 
       <div className="mt-2 flex items-center gap-2">

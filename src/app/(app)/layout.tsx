@@ -8,7 +8,6 @@ import { ToastProvider } from "@/components/toast";
 import { CartProvider } from "@/components/cart-context";
 import { CartSheet } from "@/components/cart-sheet";
 import { ProductDetailSheet } from "@/components/product-detail-sheet";
-import { IconBottle } from "@/components/icons";
 import { getSession, logout as doLogout, type Session } from "@/lib/auth";
 import { readCachedTheme, syncThemeClass } from "@/lib/theme";
 import { useAppName } from "@/lib/use-app-name";
@@ -43,9 +42,11 @@ export default function AppLayout({
             <header className="no-print sticky top-0 z-30 border-b border-line bg-surface/85 backdrop-blur">
               <div className="flex items-center justify-between gap-2 px-4 py-3">
                 <div className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-control bg-primary shadow-soft">
-                    <IconBottle className="h-4 w-4 text-white" />
-                  </span>
+                  <img
+                    src="/icons/icon-192.png"
+                    alt=""
+                    className="h-8 w-8 rounded-control object-cover shadow-soft"
+                  />
                   <span className="text-sm font-extrabold tracking-tight text-ink">
                     {appName}
                   </span>

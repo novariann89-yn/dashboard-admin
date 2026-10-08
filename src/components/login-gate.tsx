@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { IconBottle, IconEye, IconEyeOff, IconLock, IconUser } from "@/components/icons";
+import { IconEye, IconEyeOff, IconLock, IconUser } from "@/components/icons";
 import { login, getSession, logout as doLogout } from "@/lib/auth";
 import {
   ensureSeeded,
@@ -75,9 +75,11 @@ export function LoginGate({ children }: { children: ReactNode }) {
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-sm flex-col justify-center gap-6 p-6">
       <div className="flex flex-col items-center gap-3 text-center">
-        <span className="flex h-16 w-16 items-center justify-center rounded-card bg-primary shadow-card">
-          <IconBottle className="h-8 w-8 text-white" />
-        </span>
+        <img
+          src="/icons/icon-192.png"
+          alt="SuperSoy"
+          className="h-24 w-24 rounded-card object-cover shadow-card"
+        />
         <h1 className="text-2xl font-extrabold tracking-tight text-ink">{appName}</h1>
         <p className="text-sm text-ink-soft">Masukkan ID dan Sandi</p>
       </div>
