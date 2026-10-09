@@ -28,7 +28,7 @@ import {
   listClaims,
   updateClaimNote,
 } from "@/lib/repos/loyalty";
-import { listVariantsWithProduct, profitPerUnit } from "@/lib/repos/products";
+import { profitPerUnit } from "@/lib/repos/products";
 import { formatPhone, searchCustomers } from "@/lib/search";
 import { useDebouncedValue } from "@/lib/use-debounced";
 import { getSession } from "@/lib/auth";
@@ -41,7 +41,6 @@ export default function PelangganPage() {
   const customers = useLiveQuery(() => listCustomers(), [], []);
   const transactions = useLiveQuery(() => getDb().transactions.toArray(), [], []);
   const items = useLiveQuery(() => getDb().transactionItems.toArray(), [], []);
-  const variants = useLiveQuery(() => listVariantsWithProduct(false), [], []);
 
   const [tab, setTab] = useState<BuyerType>("member");
   const [query, setQuery] = useState("");
@@ -310,7 +309,6 @@ export default function PelangganPage() {
                       customer={customer}
                       transactions={transactions}
                       items={items}
-                      variants={variants}
                     />
                   )}
                 </li>
@@ -336,12 +334,10 @@ function CustomerDetail({
   customer,
   transactions,
   items,
-  variants,
 }: {
   customer: Customer;
   transactions: Transaction[];
   items: ItemRow[];
-  variants: { id: string; productName: string; sizeName: string; sellPrice: number }[];
 }) {
   const toast = useToast();
   const [name, setName] = useState(customer.name);
@@ -355,10 +351,6 @@ function CustomerDetail({
   const ownIds = new Set(own.map((transaction) => transaction.id));
   const ownItems = items.filter((item) => ownIds.has(item.transactionId));
 
-  const byVariant = new Map<string, number>();
-  for (const item of ownItems) {
-    byVariant.set(item.variantId, (byVariant.get(item.variantId) ?? 0) + item.qty);
-  }
   const totalBottles = ownItems.reduce((sum, item) => sum + item.qty, 0);
   const totalSpend = own.reduce((sum, transaction) => sum + transaction.finalTotal, 0);
   const totalProfit = ownItems.reduce(
@@ -377,6 +369,7 @@ function CustomerDetail({
     [],
   );
   const [isOwner, setIsOwner] = useState(false);
+  const [claimNotes, setClaimNotes] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setIsOwner(getSession()?.role === "owner");
@@ -390,11 +383,12 @@ function CustomerDetail({
   async function handleClaim(
     productId: string,
     productName: string,
-    target: number,
+    remaining: number,
   ) {
-    if (!window.confirm(`Klaim hadiah "${productName}" (${target} pcs)?`)) return;
+    if (!window.confirm(`Klaim ${remaining} pcs "${productName}"?`)) return;
     try {
-      await claimReward(customer.id, productId);
+      await claimReward(customer.id, productId, claimNotes[productId] ?? "");
+      setClaimNotes((prev) => ({ ...prev, [productId]: "" }));
       toast("Hadiah diklaim");
     } catch (error) {
       toast(error instanceof Error ? error.message : "Gagal klaim", "error");
@@ -448,46 +442,48 @@ function CustomerDetail({
         </div>
       </div>
 
-      {byVariant.size > 0 && (
-        <ul className="mt-2 flex flex-col gap-0.5">
-          {Array.from(byVariant.entries()).map(([variantId, qty]) => {
-            const variant = variants.find((item) => item.id === variantId);
-            return (
-              <li key={variantId} className="text-xs text-ink-soft">
-                {variant ? `${variant.productName} ${variant.sizeName}` : "?"}:{" "}
-                <span className="font-bold tabular-nums">{qty} pcs</span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
       {loyalty.length > 0 && (
         <div className="mt-3">
           <p className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
             Progres hadiah
           </p>
-          <ul className="mt-1 flex flex-col gap-1">
+          <ul className="mt-1 flex flex-col gap-2">
             {loyalty.map((row) => (
-              <li
-                key={row.productId}
-                className="flex items-center justify-between gap-2 text-xs"
-              >
-                <span className="font-bold">{row.productName}</span>
-                <span className="flex items-center gap-2 tabular-nums text-ink-soft">
-                  {row.remaining}/{row.target} pcs
-                  {isOwner && row.claimable > 0 && (
+              <li key={row.productId} className="flex flex-col gap-1.5 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold">{row.productName}</span>
+                  <span className="tabular-nums text-ink-soft">
+                    {row.remaining} pcs
+                  </span>
+                </div>
+                {isOwner && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={claimNotes[row.productId] ?? ""}
+                      onChange={(event) =>
+                        setClaimNotes((prev) => ({
+                          ...prev,
+                          [row.productId]: event.target.value,
+                        }))
+                      }
+                      placeholder="Catatan (opsional)"
+                      className="w-full rounded-control border border-line bg-surface px-2 py-1 text-[11px]"
+                    />
                     <button
                       type="button"
                       onClick={() =>
-                        handleClaim(row.productId, row.productName, row.target)
+                        handleClaim(
+                          row.productId,
+                          row.productName,
+                          row.remaining,
+                        )
                       }
-                      className="font-bold text-success underline"
+                      className="shrink-0 font-bold text-success underline"
                     >
-                      Klaim{row.claimable > 1 ? ` ×${row.claimable}` : ""}
+                      Klaim
                     </button>
-                  )}
-                </span>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

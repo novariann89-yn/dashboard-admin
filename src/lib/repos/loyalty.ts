@@ -7,12 +7,6 @@ export interface LoyaltyRow {
   productId: string;
   productName: string;
   remaining: number;
-  target: number;
-  claimable: number;
-}
-
-function clampTarget(value: number | undefined): number {
-  return Math.max(0, Math.floor(value ?? 0));
 }
 
 export async function getMemberLoyalty(
@@ -59,24 +53,21 @@ export async function getMemberLoyalty(
 
   const rows: LoyaltyRow[] = [];
   for (const productId of new Set([...purchased.keys(), ...claimed.keys()])) {
-    const target = clampTarget(productById.get(productId)?.loyaltyTarget);
-    if (target <= 0) continue;
     const remaining = Math.max(
       0,
       (purchased.get(productId) ?? 0) - (claimed.get(productId) ?? 0),
     );
+    if (remaining < 1) continue;
     rows.push({
       productId,
       productName: names.get(productId) ?? "?",
       remaining,
-      target,
-      claimable: Math.floor(remaining / target),
     });
   }
 
   return rows.sort(
     (a, b) =>
-      b.claimable - a.claimable || a.productName.localeCompare(b.productName),
+      b.remaining - a.remaining || a.productName.localeCompare(b.productName),
   );
 }
 
@@ -88,7 +79,7 @@ export async function claimReward(
   const row = (await getMemberLoyalty(customerId)).find(
     (entry) => entry.productId === productId,
   );
-  if (!row || row.claimable < 1) throw new Error("Belum cukup untuk klaim");
+  if (!row || row.remaining < 1) throw new Error("Tidak ada yang bisa diklaim");
 
   const claim: LoyaltyClaim = {
     id: newId(),
@@ -96,8 +87,7 @@ export async function claimReward(
     productId,
     productName: row.productName,
     claimedAt: Date.now(),
-    claimedQty: row.target,
-    target: row.target,
+    claimedQty: row.remaining,
     note: note?.trim() || null,
   };
   await getDb().loyaltyClaims.add(claim);
@@ -105,7 +95,7 @@ export async function claimReward(
     action: "claim_reward",
     table: "loyaltyClaims",
     recordId: claim.id,
-    newData: { customerId, productId, qty: row.target },
+    newData: { customerId, productId, qty: row.remaining },
   });
 }
 

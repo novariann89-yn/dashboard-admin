@@ -22,7 +22,6 @@ export interface Product {
   active: boolean;
   sortOrder: number;
   createdAt: number;
-  loyaltyTarget?: number;
 }
 
 export interface ProductVariant {
@@ -81,7 +80,6 @@ export interface LoyaltyClaim {
   productName: string;
   claimedAt: number;
   claimedQty: number;
-  target: number;
   note: string | null;
 }
 

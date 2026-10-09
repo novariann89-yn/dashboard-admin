@@ -15,7 +15,7 @@ async function clearAll() {
   await Promise.all(db.tables.map((table) => table.clear()));
 }
 
-async function seedProduct(target = 10) {
+async function seedMember() {
   const db = getDb();
   const now = Date.now();
   await db.products.add({
@@ -25,7 +25,6 @@ async function seedProduct(target = 10) {
     active: true,
     sortOrder: 1,
     createdAt: now,
-    loyaltyTarget: target,
   });
   await db.productVariants.add({
     id: "v1",
@@ -51,7 +50,7 @@ async function seedProduct(target = 10) {
 async function addPurchase(
   key: string,
   qty: number,
-  opts: { cancelled?: boolean; productId?: string } = {},
+  opts: { cancelled?: boolean } = {},
 ) {
   const db = getDb();
   const now = Date.now();
@@ -73,7 +72,7 @@ async function addPurchase(
     id: `i${key}`,
     transactionId: `t${key}`,
     variantId: "v1",
-    productId: opts.productId ?? "p1",
+    productId: "p1",
     productName: "Sari",
     sizeName: "250ml",
     qty,
@@ -89,23 +88,22 @@ beforeEach(async () => {
 });
 
 describe("getMemberLoyalty", () => {
-  it("derives remaining pcs and claimable count from purchases", async () => {
-    await seedProduct(10);
+  it("shows accumulated pcs from purchases", async () => {
+    await seedMember();
     await addPurchase("a", 7);
     const rows = await getMemberLoyalty("c1");
     assert.equal(rows.length, 1);
     assert.equal(rows[0].remaining, 7);
-    assert.equal(rows[0].claimable, 0);
   });
 
   it("excludes cancelled transactions", async () => {
-    await seedProduct(10);
+    await seedMember();
     await addPurchase("a", 10, { cancelled: true });
     assert.equal((await getMemberLoyalty("c1")).length, 0);
   });
 
   it("resolves product via variant when the item has no productId", async () => {
-    await seedProduct(10);
+    await seedMember();
     const db = getDb();
     const now = Date.now();
     await db.transactions.add({
@@ -136,54 +134,44 @@ describe("getMemberLoyalty", () => {
     const rows = await getMemberLoyalty("c1");
     assert.equal(rows[0].remaining, 4);
   });
-
-  it("ignores products without a target", async () => {
-    await seedProduct(0);
-    await addPurchase("a", 50);
-    assert.equal((await getMemberLoyalty("c1")).length, 0);
-  });
 });
 
 describe("claimReward", () => {
-  it("resets to zero when exactly at target", async () => {
-    await seedProduct(10);
+  it("claims all remaining and clears the progress", async () => {
+    await seedMember();
     await addPurchase("a", 10);
     await claimReward("c1", "p1");
-    const rows = await getMemberLoyalty("c1");
-    assert.equal(rows[0].remaining, 0);
-    assert.equal(rows[0].claimable, 0);
-    assert.equal((await listClaims("c1")).length, 1);
+
+    assert.equal((await getMemberLoyalty("c1")).length, 0);
+    const claims = await listClaims("c1");
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].claimedQty, 10);
   });
 
-  it("stacks: 25 pcs with target 10 gives two claims", async () => {
-    await seedProduct(10);
-    await addPurchase("a", 25);
-    assert.equal((await getMemberLoyalty("c1"))[0].claimable, 2);
-
-    await claimReward("c1", "p1");
-    assert.equal((await getMemberLoyalty("c1"))[0].remaining, 15);
-
-    await claimReward("c1", "p1");
-    assert.equal((await getMemberLoyalty("c1"))[0].remaining, 5);
-    assert.equal((await getMemberLoyalty("c1"))[0].claimable, 0);
+  it("saves the note given at claim time", async () => {
+    await seedMember();
+    await addPurchase("a", 8);
+    await claimReward("c1", "p1", " 1 botol gratis ");
+    assert.equal((await listClaims("c1"))[0].note, "1 botol gratis");
   });
 
-  it("rejects claiming before the target is reached", async () => {
-    await seedProduct(10);
-    await addPurchase("a", 9);
+  it("rejects when there is nothing to claim", async () => {
+    await seedMember();
+    await addPurchase("a", 10);
+    await claimReward("c1", "p1");
     await assert.rejects(() => claimReward("c1", "p1"));
   });
 });
 
 describe("claims history", () => {
   it("updates a note and deletes claims", async () => {
-    await seedProduct(10);
+    await seedMember();
     await addPurchase("a", 10);
     await claimReward("c1", "p1");
     const [claim] = await listClaims("c1");
 
-    await updateClaimNote(claim.id, " 1 botol gratis ");
-    assert.equal((await listClaims("c1"))[0].note, "1 botol gratis");
+    await updateClaimNote(claim.id, " 2 botol ");
+    assert.equal((await listClaims("c1"))[0].note, "2 botol");
 
     await deleteClaims([claim.id]);
     assert.equal((await listClaims("c1")).length, 0);

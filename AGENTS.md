@@ -96,11 +96,10 @@ After code changes, run `npm run restart` so the phone gets the update.
   period automatically and past data stays in Histori.
 - Histori (`/laporan`) persists across days and can be filtered by period, exported to CSV,
   and printed to PDF.
-- Member loyalty (`src/lib/repos/loyalty.ts`): per-product target (`Product.loyaltyTarget`,
-  0 = off, set in Setting). Progress is derived — non-cancelled pcs for that member+product
-  minus Σ `loyaltyClaims.claimedQty`; `claimable = floor(remaining/target)`, so unclaimed
-  progress stacks into multiple claims. Claiming is owner-only; claim history shows in the
-  Pelanggan member detail (owner-only long-press delete) with an optional editable note.
+- Member loyalty (`src/lib/repos/loyalty.ts`): no target — progress is derived (non-cancelled
+  pcs for that member+product minus Σ `loyaltyClaims.claimedQty`). The owner can claim the
+  whole remaining at any time (clears to 0); each claim takes an optional note. Claim history
+  shows in the Pelanggan member detail (owner-only, long-press delete, editable note).
 - Transaction dates are automatic. Expenses accept an optional manual date (`occurredAt`,
   default today WIB) via the `Catat Pengeluaran` form in Dompet; the report period picker
   is a filter, not data entry.

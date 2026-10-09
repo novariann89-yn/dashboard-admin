@@ -376,7 +376,6 @@ function ProductBlock({
 }) {
   const toast = useToast();
   const [showVariantForm, setShowVariantForm] = useState(false);
-  const [target, setTarget] = useState(product.loyaltyTarget ?? 0);
   const [name, setName] = useState(product.name);
   const [emoji, setEmoji] = useState(product.emoji);
 
@@ -442,29 +441,6 @@ function ProductBlock({
           className="text-[11px] font-bold text-error underline"
         >
           Hapus
-        </button>
-      </div>
-
-      <div className="mt-2 flex items-center gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-ink-soft">
-          Target hadiah (pcs)
-        </span>
-        <input
-          value={target || ""}
-          onChange={(event) => setTarget(Number(event.target.value) || 0)}
-          inputMode="numeric"
-          placeholder="0"
-          className="w-16 rounded-control border border-line bg-surface px-2 py-1 text-right text-xs tabular-nums"
-        />
-        <button
-          type="button"
-          onClick={async () => {
-            await updateProduct(product.id, { loyaltyTarget: Math.max(0, target) });
-            toast("Target hadiah disimpan");
-          }}
-          className="text-[11px] font-bold text-ink-soft underline"
-        >
-          Simpan
         </button>
       </div>
 
