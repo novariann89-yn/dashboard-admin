@@ -5,7 +5,12 @@ import type { Transaction, TransactionItem } from "./types";
 
 const METHOD_LABELS: Record<string, string> = {
   cash: "Tunai",
+  qris: "QRIS",
 };
+
+export function paymentMethodLabel(method: string): string {
+  return METHOD_LABELS[method] ?? method;
+}
 
 export function buildReceiptText(
   transaction: Transaction,
@@ -29,7 +34,7 @@ export function buildReceiptText(
   lines.push("");
   lines.push(`*TOTAL: ${rupiah(transaction.finalTotal)}*`);
   lines.push(
-    `Bayar: ${METHOD_LABELS[transaction.paymentMethod] ?? METHOD_LABELS.cash}`,
+    `Bayar: ${paymentMethodLabel(transaction.paymentMethod)}`,
   );
 
   return lines.join("\n");

@@ -12,6 +12,7 @@ export interface AppSettings {
   storeName: string;
   appName: string;
   theme: ThemeMode;
+  qrisImage: string | null;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -24,6 +25,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   storeName: "Toko Mas Andik",
   appName: "SuperSoy",
   theme: "system",
+  qrisImage: null,
 };
 
 const STORE_NAME_CACHE_KEY = "toko-store-name";
@@ -81,6 +83,7 @@ export async function getSettings(): Promise<AppSettings> {
     storeName: raw.storeName || DEFAULT_SETTINGS.storeName,
     appName: raw.appName || DEFAULT_SETTINGS.appName,
     theme: (raw.theme as ThemeMode) || DEFAULT_SETTINGS.theme,
+    qrisImage: raw.qrisImage || null,
   };
 }
 

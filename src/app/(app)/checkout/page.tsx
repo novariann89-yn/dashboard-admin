@@ -11,8 +11,9 @@ import { listCustomers } from "@/lib/repos/customers";
 import { searchCustomers } from "@/lib/search";
 import { rupiah } from "@/lib/format";
 import { createTransaction, getTransactionItems } from "@/lib/repos/transactions";
-import type { Transaction, TransactionItem } from "@/lib/types";
+import type { PaymentMethod, Transaction, TransactionItem } from "@/lib/types";
 import { buildReceiptText, whatsappUrl } from "@/lib/receipt";
+import { getSettings } from "@/lib/settings";
 import { useCart } from "@/components/cart-context";
 import { useDebouncedValue } from "@/lib/use-debounced";
 
@@ -20,11 +21,18 @@ export default function CheckoutPage() {
   const toast = useToast();
   const { items, clearCart, subtotal, totalItems, setIsOpen } = useCart();
   const customers = useLiveQuery(() => listCustomers(), [], []);
+  const qrisImage = useLiveQuery(
+    () => getSettings().then((s) => s.qrisImage),
+    [],
+    null,
+  );
 
   const [buyerType, setBuyerType] = useState<"umum" | "member">("umum");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [receivedAmount, setReceivedAmount] = useState("");
+  const [showQris, setShowQris] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<Transaction | null>(null);
   const [lastTransactionItems, setLastTransactionItems] = useState<TransactionItem[]>([]);
@@ -69,7 +77,7 @@ export default function CheckoutPage() {
         buyerType,
         customerId: selectedCustomer,
         items: transactionItems,
-        paymentMethod: "cash",
+        paymentMethod,
         note: "",
       });
 
@@ -190,51 +198,110 @@ export default function CheckoutPage() {
 
         <section className={cardClass}>
           <h2 className="text-sm font-bold text-ink-soft mb-3">Pembayaran</h2>
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <button
+              type="button"
+              onClick={() => setPaymentMethod("cash")}
+              className={`rounded-control border-2 py-2 font-bold ${paymentMethod === "cash" ? "bg-primary text-white" : "border-line bg-surface text-ink"}`}
+            >
+              Tunai
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentMethod("qris")}
+              className={`rounded-control border-2 py-2 font-bold ${paymentMethod === "qris" ? "bg-primary text-white" : "border-line bg-surface text-ink"}`}
+            >
+              QRIS
+            </button>
+          </div>
           <div className="space-y-3">
             <div>
               <label className="block text-sm font-bold text-ink-soft mb-1">Total Bayar</label>
               <div className="text-2xl font-extrabold text-primary tabular-nums">{rupiah(subtotal)}</div>
             </div>
-            <div>
-              <label htmlFor="received" className="block text-sm font-bold text-ink-soft mb-1">Uang Diterima</label>
-              <input
-                id="received"
-                type="tel"
-                inputMode="numeric"
-                value={receivedAmount}
-                onChange={(e) => setReceivedAmount(e.target.value.replace(/\D/g, "").replace(/\B(?=(\d{3})+(?!\d))/g, "."))}
-                placeholder="Contoh: 50.000"
-                className={`${inputClass} text-right text-xl font-bold tabular-nums`}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-ink-soft mb-1">Kembalian</label>
-              <div className="text-2xl font-extrabold text-success tabular-nums">{rupiah(changeAmount)}</div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {quickAmounts.map((amt) => (
+            {paymentMethod === "cash" ? (
+              <>
+                <div>
+                  <label htmlFor="received" className="block text-sm font-bold text-ink-soft mb-1">Uang Diterima</label>
+                  <input
+                    id="received"
+                    type="tel"
+                    inputMode="numeric"
+                    value={receivedAmount}
+                    onChange={(e) => setReceivedAmount(e.target.value.replace(/\D/g, "").replace(/\B(?=(\d{3})+(?!\d))/g, "."))}
+                    placeholder="Contoh: 50.000"
+                    className={`${inputClass} text-right text-xl font-bold tabular-nums`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-ink-soft mb-1">Kembalian</label>
+                  <div className="text-2xl font-extrabold text-success tabular-nums">{rupiah(changeAmount)}</div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {quickAmounts.map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setReceivedAmount(amt.toLocaleString("id-ID"))}
+                      className="flex-1 min-w-[80px] rounded-control border-2 py-2 text-sm font-bold border-line bg-surface text-ink"
+                    >
+                      {rupiah(amt)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-2 rounded-control border border-line bg-surface p-3">
                 <button
-                  key={amt}
                   type="button"
-                  onClick={() => setReceivedAmount(amt.toLocaleString("id-ID"))}
-                  className="flex-1 min-w-[80px] rounded-control border-2 py-2 text-sm font-bold border-line bg-surface text-ink"
+                  onClick={() => setShowQris(true)}
+                  className="cursor-zoom-in"
                 >
-                  {rupiah(amt)}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={qrisImage || "/qris.jpg"}
+                    alt="Kode QRIS"
+                    className="w-56 max-w-full rounded-control border border-line bg-white"
+                  />
                 </button>
-              ))}
-            </div>
+                <p className="text-xs text-ink-soft">
+                  Pindai kode untuk membayar via QRIS. Ketuk untuk perbesar.
+                </p>
+              </div>
+            )}
           </div>
         </section>
 
         <button
           type="button"
           onClick={handleCheckout}
-          disabled={parseInt(receivedAmount.replace(/\D/g, "")) < subtotal}
+          disabled={
+            paymentMethod === "cash" &&
+            parseInt(receivedAmount.replace(/\D/g, "")) < subtotal
+          }
           className="w-full rounded-control bg-primary py-3.5 font-extrabold text-white shadow-soft transition hover:bg-primary-dark active:scale-[0.99] disabled:opacity-40"
         >
-          Bayar & Simpan Transaksi
+          Bayar &amp; Simpan Transaksi
         </button>
       </main>
+
+      {showQris && (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="Tutup"
+          onClick={() => setShowQris(false)}
+          className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-black/90 p-3"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={qrisImage || "/qris.jpg"}
+            alt="Kode QRIS"
+            className="max-h-full max-w-full rounded-control bg-white object-contain"
+          />
+          <p className="text-xs font-bold text-white/80">Ketuk untuk menutup</p>
+        </div>
+      )}
 
       {showReceipt && lastTransaction ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

@@ -84,7 +84,10 @@ After code changes, run `npm run restart` so the phone gets the update.
 
 ## Business rules (from the revision spec — do not change without sign-off)
 
-- Payment method: **CASH only**. No QRIS/transfer, no payment gateway.
+- Payment method: **CASH or QRIS**. QRIS is record-only (a stored `paymentMethod`
+  value plus a QRIS image shown at checkout) — no payment gateway, no online
+  verification. The image defaults to the bundled `public/qris.jpg` and is
+  overridable in Setting (`settings.qrisImage`, backup-safe).
 - **No** reseller pricing, price levels/tiers, discount engine, bonus products, or "tutup buku".
 - Snapshot `unitPrice`, `unitCost`, and `netProfitSnapshot` on every transaction item;
   changing prices today must never alter past reports.

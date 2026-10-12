@@ -107,6 +107,8 @@ export default function SettingPage() {
         loaded={settings !== null}
       />
 
+      <QrisSection qrisImage={settings?.qrisImage ?? null} />
+
       <RoundingSection
         enabled={settings?.roundingEnabled ?? true}
         step={settings?.roundingStep ?? 500}
@@ -835,6 +837,74 @@ function AppearanceSection({
             </button>
           </div>
         )}
+      </div>
+    </section>
+  );
+}
+
+function QrisSection({ qrisImage }: { qrisImage: string | null }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+
+  async function handlePick(file: File) {
+    setBusy(true);
+    try {
+      const dataUrl = await compressImage(file, 900);
+      await updateSettings({ qrisImage: dataUrl });
+      toast("Gambar QRIS disimpan");
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Gagal memuat gambar",
+        "error",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleClear() {
+    await updateSettings({ qrisImage: null });
+    toast("Kembali ke QRIS bawaan");
+  }
+
+  return (
+    <section className={cardClass}>
+      <h2 className={sectionLabelClass}>QRIS</h2>
+      <p className="mt-1 text-xs text-ink-soft">
+        Gambar yang tampil saat pembayaran QRIS di Checkout. Bawaannya kode toko;
+        ganti dengan foto QRIS sendiri kalau perlu.
+      </p>
+      <div className="mt-3 flex items-center gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={qrisImage || "/qris.jpg"}
+          alt="Kode QRIS"
+          className="h-28 w-28 rounded-control border border-line bg-white object-contain"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <label className={`${secondaryButtonClass} cursor-pointer`}>
+            {busy ? "Memuat..." : "Ganti gambar"}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) handlePick(file);
+              }}
+            />
+          </label>
+          {qrisImage && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="text-[11px] font-bold text-error underline"
+            >
+              Pakai bawaan
+            </button>
+          )}
+        </div>
       </div>
     </section>
   );

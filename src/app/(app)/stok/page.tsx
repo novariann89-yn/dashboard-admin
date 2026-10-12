@@ -4,7 +4,6 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { useToast } from "@/components/toast";
 import {
-  badgeClass,
   buttonClass,
   cardClass,
   inputClass,
@@ -81,22 +80,40 @@ function StockRow({ variant }: { variant: VariantWithProduct }) {
   const status = STATUS[level];
   const amount = Number(qty);
 
-  async function run(action: "add" | "set") {
+  async function add() {
     if (!Number.isFinite(amount) || amount <= 0) {
       toast("Masukkan jumlah lebih dari 0", "error");
       return;
     }
     setBusy(true);
     try {
-      const next = action === "add" ? await addStock(variant.id, amount) : await setStock(variant.id, amount);
+      const next = await addStock(variant.id, amount);
       setQty("");
-      toast(
-        action === "add"
-          ? `Stok ditambah. Sisa ${next}`
-          : `Stok disesuaikan menjadi ${next}`,
-      );
+      toast(`Stok ditambah. Sisa ${next}`);
     } catch (error) {
-      toast(error instanceof Error ? error.message : "Gagal mengubah stok", "error");
+      toast(error instanceof Error ? error.message : "Gagal menambah stok", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clearStock() {
+    if (
+      !window.confirm(
+        `Kosongkan stok ${variant.productName} ${variant.sizeName}?`,
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      await setStock(variant.id, 0);
+      setQty("");
+      toast("Stok dikosongkan");
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Gagal mengosongkan stok",
+        "error",
+      );
     } finally {
       setBusy(false);
     }
@@ -125,7 +142,7 @@ function StockRow({ variant }: { variant: VariantWithProduct }) {
         </span>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <input
           value={qty}
           onChange={(event) => setQty(event.target.value.replace(/\D/g, ""))}
@@ -136,18 +153,18 @@ function StockRow({ variant }: { variant: VariantWithProduct }) {
         <button
           type="button"
           disabled={busy}
-          onClick={() => run("add")}
+          onClick={add}
           className={`${buttonClass} shrink-0 px-3 py-2`}
         >
           + Tambah
         </button>
         <button
           type="button"
-          disabled={busy}
-          onClick={() => run("set")}
-          className={`${badgeClass} shrink-0 cursor-pointer px-3 py-2`}
+          disabled={busy || variant.stock === 0}
+          onClick={clearStock}
+          className="shrink-0 text-[11px] font-bold text-error underline disabled:opacity-40"
         >
-          Sesuaikan
+          Kosongkan
         </button>
       </div>
     </li>

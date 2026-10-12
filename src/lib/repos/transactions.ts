@@ -4,7 +4,12 @@ import { newId } from "../id";
 import { computeTotals } from "../pricing";
 import { getSettings } from "../settings";
 import { logAudit } from "./audit";
-import type { BuyerType, Transaction, TransactionItem } from "../types";
+import type {
+  BuyerType,
+  PaymentMethod,
+  Transaction,
+  TransactionItem,
+} from "../types";
 
 const CANCEL_WINDOW_MS = 15 * 60 * 1000;
 const ATTACH_WINDOW_MS = 3 * 60 * 1000;
@@ -13,7 +18,7 @@ export interface CreateTransactionInput {
   buyerType: BuyerType;
   customerId: string | null;
   items: { variantId: string; qty: number }[];
-  paymentMethod: "cash";
+  paymentMethod: PaymentMethod;
   note?: string | null;
   occurredAt?: number;
 }
@@ -92,7 +97,7 @@ export async function createTransaction(
     customerName,
     subtotal,
     finalTotal,
-    paymentMethod: "cash",
+    paymentMethod: input.paymentMethod,
     cancelled: false,
     cancelReason: null,
     cancelledAt: null,

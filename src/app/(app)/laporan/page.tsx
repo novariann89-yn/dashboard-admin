@@ -19,7 +19,7 @@ import { formatDateTime, rupiah } from "@/lib/format";
 import { getSession } from "@/lib/auth";
 import { canDeleteHistory } from "@/lib/permissions";
 import { deleteTransactions } from "@/lib/repos/transactions";
-import { buildReceiptText, whatsappUrl } from "@/lib/receipt";
+import { buildReceiptText, paymentMethodLabel, whatsappUrl } from "@/lib/receipt";
 import { useMultiSelect } from "@/lib/use-multi-select";
 import type { Transaction } from "@/lib/types";
 
@@ -117,7 +117,7 @@ export default function LaporanPage() {
           productNames,
           String(totalQty),
           rupiah(transaction.finalTotal),
-          transaction.paymentMethod,
+          paymentMethodLabel(transaction.paymentMethod),
         ]);
       }
       downloadCsv(`historis-${period.label}.csv`, rows);
@@ -211,7 +211,7 @@ export default function LaporanPage() {
                           {formatDateTime(transaction.occurredAt)}
                         </span>
                         <span className="block text-xs tabular-nums text-ink-soft">
-                          Tunai
+                          {paymentMethodLabel(transaction.paymentMethod)}
                         </span>
                       </span>
                     </span>
@@ -275,7 +275,7 @@ export default function LaporanPage() {
                         </div>
                         <div className="flex items-center justify-between text-ink-soft">
                           <span>Bayar</span>
-                          <span>Tunai</span>
+                          <span>{paymentMethodLabel(transaction.paymentMethod)}</span>
                         </div>
                       </div>
 

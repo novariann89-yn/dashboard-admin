@@ -2,6 +2,8 @@ export type ID = string;
 
 export type BuyerType = "umum" | "member";
 
+export type PaymentMethod = "cash" | "qris";
+
 export type UserRole = "owner" | "admin";
 
 export interface User {
@@ -53,7 +55,7 @@ export interface Transaction {
   customerName: string | null;
   subtotal: number;
   finalTotal: number;
-  paymentMethod: "cash";
+  paymentMethod: PaymentMethod;
   cancelled: boolean;
   cancelReason: string | null;
   cancelledAt: number | null;

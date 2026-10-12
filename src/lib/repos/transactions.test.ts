@@ -2,7 +2,11 @@ import "fake-indexeddb/auto";
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 import { getDb, resetDbInstance } from "../db";
-import { deleteTransaction, deleteTransactions } from "./transactions";
+import {
+  createTransaction,
+  deleteTransaction,
+  deleteTransactions,
+} from "./transactions";
 
 async function clearAll() {
   const db = getDb();
@@ -67,6 +71,24 @@ async function seed() {
 beforeEach(async () => {
   resetDbInstance();
   await clearAll();
+});
+
+describe("createTransaction", () => {
+  it("stores the chosen payment method (qris)", async () => {
+    await seed();
+    const db = getDb();
+    const { transaction } = await createTransaction({
+      buyerType: "umum",
+      customerId: null,
+      items: [{ variantId: "v1", qty: 1 }],
+      paymentMethod: "qris",
+    });
+    assert.equal(transaction.paymentMethod, "qris");
+    assert.equal(
+      (await db.transactions.get(transaction.id))?.paymentMethod,
+      "qris",
+    );
+  });
 });
 
 describe("deleteTransaction", () => {

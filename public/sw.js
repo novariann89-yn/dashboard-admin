@@ -1,4 +1,4 @@
-const CACHE = "dashboard-admin-v3";
+const CACHE = "dashboard-admin-v4";
 
 const APP_SHELL = [
   "/",
@@ -9,6 +9,7 @@ const APP_SHELL = [
   "/laporan",
   "/setting",
   "/icons/icon-192.png",
+  "/qris.jpg",
 ];
 
 self.addEventListener("install", (event) => {
