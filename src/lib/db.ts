@@ -8,6 +8,7 @@ import type {
   Product,
   ProductVariant,
   Setting,
+  Tombstone,
   Transaction,
   TransactionItem,
   User,
@@ -25,6 +26,7 @@ export class TokoDB extends Dexie {
   auditLog!: Table<AuditLog, string>;
   settings!: Table<Setting, string>;
   loyaltyClaims!: Table<LoyaltyClaim, string>;
+  tombstones!: Table<Tombstone, string>;
 
   constructor() {
     super("toko-db");
@@ -42,6 +44,9 @@ export class TokoDB extends Dexie {
     });
     this.version(2).stores({
       loyaltyClaims: "id, customerId, productId, claimedAt",
+    });
+    this.version(3).stores({
+      tombstones: "key, table, recordId, deletedAt",
     });
   }
 }

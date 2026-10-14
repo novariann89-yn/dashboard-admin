@@ -2,6 +2,7 @@ import { getDb } from "../db";
 import { newId } from "../id";
 import type { Product, ProductVariant } from "../types";
 import { logAudit } from "./audit";
+import { addTombstones } from "./tombstones";
 
 export async function listProducts(): Promise<Product[]> {
   const products = await getDb().products.toArray();
@@ -144,6 +145,7 @@ export async function deleteVariant(id: string): Promise<void> {
     recordId: id,
     oldData: { sizeName: existing.sizeName, sellPrice: existing.sellPrice },
   });
+  await addTombstones([{ table: "productVariants", recordId: id }]);
 }
 
 export async function deleteProduct(id: string): Promise<void> {
@@ -167,6 +169,13 @@ export async function deleteProduct(id: string): Promise<void> {
     recordId: id,
     oldData: { name: existing.name, variantCount: variantIds.length },
   });
+  await addTombstones([
+    { table: "products", recordId: id },
+    ...variantIds.map((variantId) => ({
+      table: "productVariants",
+      recordId: String(variantId),
+    })),
+  ]);
 }
 
 export async function variantsWithMissingCost(): Promise<ProductVariant[]> {

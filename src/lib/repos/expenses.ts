@@ -2,6 +2,7 @@ import { getDb } from "../db";
 import { newId } from "../id";
 import type { Expense } from "../types";
 import { logAudit } from "./audit";
+import { addTombstones } from "./tombstones";
 
 export const EXPENSE_CATEGORIES = [
   "Bahan Baku",
@@ -67,4 +68,5 @@ export async function deleteExpense(id: string): Promise<void> {
       ? { category: existing.category, amount: existing.amount }
       : null,
   });
+  await addTombstones([{ table: "expenses", recordId: id }]);
 }

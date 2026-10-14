@@ -5,7 +5,9 @@
   "engines": {
     "node": "24.x"
   },
-  "allowScripts": ["esbuild@*"],
+  "allowScripts": [
+    "esbuild@*"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -20,12 +22,14 @@
     "dexie": "^4.0.0",
     "dexie-react-hooks": "^1.1.0",
     "next": "^16.3.5",
+    "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "fake-indexeddb": "^6.0.0",

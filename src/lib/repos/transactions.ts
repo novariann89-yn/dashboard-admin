@@ -4,6 +4,7 @@ import { newId } from "../id";
 import { computeTotals } from "../pricing";
 import { getSettings } from "../settings";
 import { logAudit } from "./audit";
+import { addTombstones } from "./tombstones";
 import type {
   BuyerType,
   PaymentMethod,
@@ -193,6 +194,10 @@ export async function deleteTransactions(ids: string[]): Promise<void> {
     table: "transactions",
     newData: { count: found.length },
   });
+
+  await addTombstones(
+    found.map((id) => ({ table: "transactions", recordId: id })),
+  );
 }
 
 export async function deleteTransaction(id: string): Promise<void> {

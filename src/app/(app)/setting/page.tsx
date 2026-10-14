@@ -3,6 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from "react";
 import { IconDownload } from "@/components/icons";
+import { SyncSection } from "@/components/sync-section";
 import { useToast } from "@/components/toast";
 import {
   badgeClass,
@@ -108,6 +109,8 @@ export default function SettingPage() {
       />
 
       <QrisSection qrisImage={settings?.qrisImage ?? null} />
+
+      <SyncSection />
 
       <RoundingSection
         enabled={settings?.roundingEnabled ?? true}

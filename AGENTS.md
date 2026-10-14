@@ -57,12 +57,22 @@ After code changes, run `npm run restart` so the phone gets the update.
   image data URL + position/dim in the `settings` table (keys `backgroundImage`,
   `backgroundPosition`, `backgroundDim`) and applies it to `document.body` on load
   (`(app)/layout.tsx`); it is backup-safe and independent of light/dark theme.
-- Offline/PWA: `public/sw.js` (app-shell cache `dashboard-admin-v3`, network-first
+- Offline/PWA: `public/sw.js` (app-shell cache `dashboard-admin-v4`, network-first
   navigation) registered by `src/components/pwa-register.tsx` **only in secure contexts**
   (HTTPS/localhost), so LAN HTTP keeps working. `src/app/manifest.ts` provides the manifest.
 - `src/lib/backup.ts` — JSON export/import across **all** Dexie tables; restore clears the
   legacy PIN keys. `src/lib/format.ts`, `src/lib/id.ts`, `src/lib/csv.ts`, `src/lib/receipt.ts`,
   `src/lib/pricing.ts` (rounding/margin/change) are pure helpers.
+- Sync (Phase 1, one-way history push over LAN): `src/lib/sync/payload.ts` (merge engine:
+  union by id, deletes-win via `tombstones`, customers add-only, catalog identity adopt,
+  stock delta for existing variants), `src/lib/sync/webrtc.ts` (WebRTC data channel;
+  64 KB chunks with receiver acks/progress + length check, stall timeout), `src/lib/sync/signaling.ts` (SDP deflate + password SHA-256).
+  UI: owner-only `SyncSection` in Setting; QR render `components/qr-code.tsx` (`qrcode`
+  dep), scan `components/qr-scan.tsx` (native `BarcodeDetector` + manual fallback).
+  DB v3 adds `tombstones`; delete fns in `repos/{transactions,expenses,customers,products}.ts`
+  write tombstones. Requires HTTPS (secure context). Known gaps: restocks/adjustments/
+  cancellations don't sync (stock can drift); no two-way yet — event-sourced `stockEvents`
+  is the Phase 2 fix.
 - Tests use `fake-indexeddb/auto` (import it before any repo/db import) and
   `resetDbInstance()` between tests.
 
@@ -126,7 +136,9 @@ After code changes, run `npm run restart` so the phone gets the update.
   cart flow, minimal blue theme, Dompet, Histori, Stok (restock + set exact), PWA/offline
   app-shell, backup/restore, revision-2 Settings (store name, owner account/sandi, admin
   accounts + permissions, per-variant profit, expense presets, product/variant delete
-  (owner-only, cascades variants; Histori unaffected — items snapshot product name/price)).
+  (owner-only, cascades variants; Histori unaffected — items snapshot product name/price)),
+  QRIS payment method + editable QRIS image, member loyalty claims, custom background,
+  and Phase-1 one-way P2P history sync (WebRTC + QR pairing, owner-only, HTTPS).
 - Full offline install requires HTTPS (Vercel or local certs); LAN HTTP works but is not
   installable. `vercel.json` relies on Vercel auto-detecting the Next.js static export
   (`output: "export"` → `out/`); do not set `outputDirectory` (pointing it at `out`/`.next`

@@ -4,6 +4,7 @@ import { normalizeName, normalizePhone, searchCustomers } from "../search";
 import type { Customer, BuyerType } from "../types";
 import { listVariantsWithProduct } from "./products";
 import { logAudit } from "./audit";
+import { addTombstones } from "./tombstones";
 
 export async function createCustomer(input: {
   name: string;
@@ -85,6 +86,9 @@ export async function deleteCustomers(ids: string[]): Promise<void> {
     table: "customers",
     newData: { count: found.length },
   });
+  await addTombstones(
+    found.map((id) => ({ table: "customers", recordId: id })),
+  );
 }
 
 export async function listCustomers(type?: BuyerType): Promise<Customer[]> {

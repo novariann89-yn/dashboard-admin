@@ -115,3 +115,10 @@ export interface Setting {
   key: string;
   value: string;
 }
+
+export interface Tombstone {
+  key: string;
+  table: string;
+  recordId: string;
+  deletedAt: number;
+}
