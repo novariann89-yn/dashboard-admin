@@ -28,7 +28,10 @@ export async function addStock(variantId: string, qty: number): Promise<number> 
   if (!variant) throw new Error("Produk tidak ditemukan");
 
   const next = Math.max(0, variant.stock + delta);
-  await db.productVariants.update(variantId, { stock: next });
+  await db.productVariants.update(variantId, {
+    stock: next,
+    updatedAt: Date.now(),
+  });
   await logAudit({
     action: "stock_addition",
     table: "productVariants",
@@ -46,7 +49,10 @@ export async function setStock(variantId: string, qty: number): Promise<number> 
   const variant = await db.productVariants.get(variantId);
   if (!variant) throw new Error("Produk tidak ditemukan");
 
-  await db.productVariants.update(variantId, { stock: next });
+  await db.productVariants.update(variantId, {
+    stock: next,
+    updatedAt: Date.now(),
+  });
   await logAudit({
     action: "stock_adjust",
     table: "productVariants",

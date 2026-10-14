@@ -31,6 +31,7 @@ function product(over: Partial<Product> = {}): Product {
     active: true,
     sortOrder: 1,
     createdAt: now,
+    updatedAt: now,
     ...over,
   };
 }
@@ -47,6 +48,19 @@ function variant(over: Partial<ProductVariant> = {}): ProductVariant {
     active: true,
     sortOrder: 1,
     createdAt: now,
+    updatedAt: now,
+    ...over,
+  };
+}
+
+function customer(over: Partial<Customer> = {}): Customer {
+  return {
+    id: "c1",
+    name: "Budi",
+    nameNormal: "budi",
+    phoneNormal: "0812",
+    active: true,
+    updatedAt: now,
     ...over,
   };
 }
@@ -145,52 +159,64 @@ describe("applyHistoryPayload", () => {
     assert.equal(await db.transactions.count(), 0);
   });
 
-  it("keeps existing customers (add-only)", async () => {
+  it("customer merge is last-write-wins", async () => {
     const db = getDb();
-    const existing: Customer = {
-      id: "c1",
-      name: "Budi",
-      nameNormal: "budi",
-      phoneNormal: "0812",
-      active: true,
-    };
-    await db.customers.add(existing);
+    await db.customers.add(customer({ name: "Budi", updatedAt: 100 }));
 
     await applyHistoryPayload(
-      payload({ customers: [{ ...existing, name: "Budi Baru" }] }),
+      payload({ customers: [customer({ name: "Budi Lama", updatedAt: 50 })] }),
     );
-
     assert.equal((await db.customers.get("c1"))?.name, "Budi");
+
+    await applyHistoryPayload(
+      payload({ customers: [customer({ name: "Budi Baru", updatedAt: 200 })] }),
+    );
+    assert.equal((await db.customers.get("c1"))?.name, "Budi Baru");
   });
 
-  it("decrements stock for peer sales on existing variants, once", async () => {
+  it("variant + stock merge is last-write-wins", async () => {
     const db = getDb();
-    await db.productVariants.add(variant());
+    await db.productVariants.add(variant({ stock: 10, updatedAt: 100 }));
 
-    const incoming = payload({
-      transactions: [tx("t1")],
-      transactionItems: [item("i1", "t1", "v1", 3)],
-    });
+    await applyHistoryPayload(
+      payload({ productVariants: [variant({ stock: 3, updatedAt: 50 })] }),
+    );
+    assert.equal((await db.productVariants.get("v1"))?.stock, 10);
 
-    await applyHistoryPayload(incoming);
-    assert.equal((await db.productVariants.get("v1"))?.stock, 7);
-
-    await applyHistoryPayload(incoming);
-    assert.equal((await db.productVariants.get("v1"))?.stock, 7);
+    await applyHistoryPayload(
+      payload({ productVariants: [variant({ stock: 3, updatedAt: 200 })] }),
+    );
+    assert.equal((await db.productVariants.get("v1"))?.stock, 3);
   });
 
-  it("adopts a new variant with its stock and does not double-count its sales", async () => {
-    const db = getDb();
+  it("converges on equal timestamps (deterministic tie-break)", async () => {
+    const a = variant({ id: "v1", stock: 5, updatedAt: 100 });
+    const b = variant({ id: "v1", stock: 9, updatedAt: 100 });
 
+    resetDbInstance();
+    await clearAll();
+    await getDb().productVariants.add(a);
+    await applyHistoryPayload(payload({ productVariants: [b] }));
+    const phone1 = await getDb().productVariants.get("v1");
+
+    resetDbInstance();
+    await clearAll();
+    await getDb().productVariants.add(b);
+    await applyHistoryPayload(payload({ productVariants: [a] }));
+    const phone2 = await getDb().productVariants.get("v1");
+
+    assert.deepEqual(phone1, phone2);
+  });
+
+  it("adopts new products/variants from the peer", async () => {
+    const db = getDb();
     await applyHistoryPayload(
       payload({
         products: [product()],
         productVariants: [variant({ id: "v9", stock: 6 })],
-        transactions: [tx("t1")],
-        transactionItems: [item("i1", "t1", "v9", 2)],
       }),
     );
-
+    assert.equal((await db.products.get("p1"))?.name, "Sari");
     assert.equal((await db.productVariants.get("v9"))?.stock, 6);
   });
 });

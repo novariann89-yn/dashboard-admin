@@ -27,6 +27,7 @@ async function seed() {
     active: true,
     sortOrder: 1,
     createdAt: now,
+    updatedAt: now,
   });
   await db.transactions.add({
     id: "t1",

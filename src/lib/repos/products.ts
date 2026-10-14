@@ -52,6 +52,7 @@ export async function createProduct(input: {
     active: true,
     sortOrder: input.sortOrder ?? existing + 1,
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   };
   await db.products.add(product);
   return product;
@@ -61,7 +62,7 @@ export async function updateProduct(
   id: string,
   patch: Partial<Pick<Product, "name" | "emoji" | "active" | "sortOrder">>,
 ): Promise<void> {
-  await getDb().products.update(id, patch);
+  await getDb().products.update(id, { ...patch, updatedAt: Date.now() });
 }
 
 export async function createVariant(input: {
@@ -85,6 +86,7 @@ export async function createVariant(input: {
     active: true,
     sortOrder: input.sortOrder ?? existing + 1,
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   };
   await db.productVariants.add(variant);
   return variant;
@@ -105,6 +107,7 @@ export async function updateVariant(
 
   const next = {
     ...patch,
+    updatedAt: Date.now(),
     sellPrice: patch.sellPrice !== undefined ? Math.max(0, Math.round(patch.sellPrice)) : undefined,
     costPrice: patch.costPrice !== undefined ? Math.max(0, Math.round(patch.costPrice)) : undefined,
     netProfitPerUnit: patch.netProfitPerUnit !== undefined ? Math.max(0, Math.round(patch.netProfitPerUnit)) : undefined,

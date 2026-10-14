@@ -29,7 +29,7 @@ After code changes, run `npm run restart` so the phone gets the update.
 
 - Next.js 16 App Router with `output: "export"` (static HTML/JS). No server actions,
   no API routes, no database server.
-- `src/lib/db.ts` — Dexie schema (version 1) for all tables. `getDb()` is lazy so
+- `src/lib/db.ts` — Dexie schema (versions 1–4) for all tables. `getDb()` is lazy so
   nothing touches IndexedDB during SSR/prerender. `resetDbInstance()` exists for tests.
   Tables: `products`, `productVariants`, `customers`, `transactions`,
   `transactionItems`, `expenses`, `expensePresets`, `users`, `auditLog`, `settings`.
@@ -63,16 +63,18 @@ After code changes, run `npm run restart` so the phone gets the update.
 - `src/lib/backup.ts` — JSON export/import across **all** Dexie tables; restore clears the
   legacy PIN keys. `src/lib/format.ts`, `src/lib/id.ts`, `src/lib/csv.ts`, `src/lib/receipt.ts`,
   `src/lib/pricing.ts` (rounding/margin/change) are pure helpers.
-- Sync (Phase 1, one-way history push over LAN): `src/lib/sync/payload.ts` (merge engine:
-  union by id, deletes-win via `tombstones`, customers add-only, catalog identity adopt,
-  stock delta for existing variants), `src/lib/sync/webrtc.ts` (WebRTC data channel;
-  64 KB chunks with receiver acks/progress + length check, stall timeout), `src/lib/sync/signaling.ts` (SDP deflate + password SHA-256).
-  UI: owner-only `SyncSection` in Setting; QR render `components/qr-code.tsx` (`qrcode`
-  dep), scan `components/qr-scan.tsx` (native `BarcodeDetector` + manual fallback).
-  DB v3 adds `tombstones`; delete fns in `repos/{transactions,expenses,customers,products}.ts`
-  write tombstones. Requires HTTPS (secure context). Known gaps: restocks/adjustments/
-  cancellations don't sync (stock can drift); no two-way yet — event-sourced `stockEvents`
-  is the Phase 2 fix.
+- Sync (two-way, LAN): `src/lib/sync/payload.ts` (merge engine: history
+  union by id; deletes-win via `tombstones`; products/variants/customers **and stock**
+  are last-write-wins by `updatedAt` with a deterministic content tie-break), `src/lib/sync/webrtc.ts`
+  (`exchange()` sends + receives over one channel; 64 KB chunks, receiver acks/progress,
+  length check, stall timeout), `src/lib/sync/signaling.ts` (SDP deflate + password SHA-256).
+  UI: owner-only `SyncSection` in Setting — **"Tampilkan kode" / "Scan kode"**; QR render
+  `components/qr-code.tsx` (`qrcode` dep), scan `components/qr-scan.tsx` (native
+  `BarcodeDetector` + manual fallback). DB v3 `tombstones`, v4 `updatedAt` on
+  products/variants/customers; delete fns in `repos/{transactions,expenses,customers,products}.ts`
+  write tombstones. Users/settings are NOT synced (stay per-phone). Requires HTTPS
+  (secure context). `ponytail`: LWW stock is correct only while the two phones **take
+  turns** selling; simultaneous selling needs event-sourced `stockEvents`.
 - Tests use `fake-indexeddb/auto` (import it before any repo/db import) and
   `resetDbInstance()` between tests.
 
@@ -138,7 +140,7 @@ After code changes, run `npm run restart` so the phone gets the update.
   accounts + permissions, per-variant profit, expense presets, product/variant delete
   (owner-only, cascades variants; Histori unaffected — items snapshot product name/price)),
   QRIS payment method + editable QRIS image, member loyalty claims, custom background,
-  and Phase-1 one-way P2P history sync (WebRTC + QR pairing, owner-only, HTTPS).
+  and two-way LAN P2P sync (WebRTC + QR pairing, owner-only, HTTPS).
 - Full offline install requires HTTPS (Vercel or local certs); LAN HTTP works but is not
   installable. `vercel.json` relies on Vercel auto-detecting the Next.js static export
   (`output: "export"` → `out/`); do not set `outputDirectory` (pointing it at `out`/`.next`

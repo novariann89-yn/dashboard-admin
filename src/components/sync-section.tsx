@@ -13,9 +13,8 @@ import {
   type MergeSummary,
 } from "@/lib/sync/payload";
 import {
+  exchange,
   finishSender,
-  receivePayload,
-  sendPayload,
   startReceiver,
   startSender,
   waitForOpen,
@@ -25,12 +24,11 @@ import {
 
 type Phase =
   | "idle"
-  | "sender-offer"
-  | "sender-answer"
-  | "sender-transfer"
-  | "receiver-scan"
-  | "receiver-answer"
-  | "receiver-transfer"
+  | "send-offer"
+  | "send-scan"
+  | "recv-scan"
+  | "recv-answer"
+  | "syncing"
   | "done";
 
 function ManualCode({ value }: { value: string }) {
@@ -94,6 +92,17 @@ export function SyncSection() {
     return pw;
   }
 
+  async function runSync(channel: RTCDataChannel) {
+    setPhase("syncing");
+    const theirs = await exchange(channel, await buildHistoryPayload(), setProgress);
+    if (!isHistoryPayload(theirs)) {
+      throw new Error("Data sinkron tidak dikenal");
+    }
+    setSummary(await applyHistoryPayload(theirs));
+    toast("Sinkron selesai");
+    setPhase("done");
+  }
+
   async function startSend() {
     const pw = requirePassword();
     if (!pw) return;
@@ -103,7 +112,7 @@ export function SyncSection() {
       const session = await startSender(await hashPassword(pw));
       senderRef.current = session;
       setQrValue(session.code);
-      setPhase("sender-offer");
+      setPhase("send-offer");
     } catch (e) {
       fail(e, "Gagal memulai");
     }
@@ -113,15 +122,12 @@ export function SyncSection() {
     const session = senderRef.current;
     if (!session) return;
     setError(null);
-    setPhase("sender-transfer");
     try {
       await finishSender(session, answerCode, await hashPassword(password.trim()));
       await waitForOpen(session.channel);
-      await sendPayload(session.channel, await buildHistoryPayload(), setProgress);
-      toast("Data terkirim");
-      setPhase("done");
+      await runSync(session.channel);
     } catch (e) {
-      fail(e, "Gagal mengirim");
+      fail(e, "Gagal menyinkron");
     }
   }
 
@@ -129,7 +135,7 @@ export function SyncSection() {
     if (!requirePassword()) return;
     setError(null);
     setSummary(null);
-    setPhase("receiver-scan");
+    setPhase("recv-scan");
   }
 
   async function receiverScanned(offerCode: string) {
@@ -141,32 +147,22 @@ export function SyncSection() {
       );
       receiverRef.current = session;
       setQrValue(session.answerCode);
-      setPhase("receiver-answer");
+      setPhase("recv-answer");
       const channel = await session.channel;
       await waitForOpen(channel);
-      setPhase("receiver-transfer");
-      const payload = await receivePayload(channel, setProgress);
-      if (!isHistoryPayload(payload)) {
-        throw new Error("Data sinkron tidak dikenal");
-      }
-      setSummary(await applyHistoryPayload(payload));
-      toast("Data diterima");
-      setPhase("done");
+      await runSync(channel);
     } catch (e) {
-      fail(e, "Gagal menerima");
+      fail(e, "Gagal menyinkron");
     }
   }
-
-  const busy =
-    phase === "sender-transfer" || phase === "receiver-transfer";
 
   return (
     <section className={cardClass}>
       <h2 className={sectionLabelClass}>Sinkron HP</h2>
       <p className="mt-1 text-xs text-ink-soft">
-        Kirim riwayat (penjualan, pengeluaran, member) ke HP lain lewat WiFi
-        yang sama — tanpa internet. Kedua HP harus membuka aplikasi ini dan
-        memakai sandi yang sama.
+        Sinkron dua arah lewat WiFi yang sama — tanpa internet. Kedua HP
+        bertukar data lalu masing-masing menyatukannya. Buka aplikasi ini di
+        kedua HP dengan sandi yang sama.
       </p>
 
       {phase === "idle" && (
@@ -183,29 +179,34 @@ export function SyncSection() {
           </label>
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={startSend} className={buttonClass}>
-              Kirim data
+              Tampilkan kode
             </button>
             <button
               type="button"
               onClick={startReceive}
               className={`${buttonClass} bg-ink`}
             >
-              Terima data
+              Scan kode
             </button>
           </div>
+          <p className="text-[11px] text-ink-soft">
+            Pilih <b>Tampilkan kode</b> di satu HP, lalu <b>Scan kode</b> di HP
+            satunya.
+          </p>
         </div>
       )}
 
-      {phase === "sender-offer" && (
+      {phase === "send-offer" && (
         <div className="mt-3 flex flex-col items-center gap-2">
           <p className="text-xs font-bold">
-            Langkah 1: minta HP penerima scan kode ini.
+            Langkah 1: minta HP satunya tap &quot;Scan kode&quot; lalu pindai
+            kode ini.
           </p>
           <QrCode value={qrValue} />
           <ManualCode value={qrValue} />
           <button
             type="button"
-            onClick={() => setPhase("sender-answer")}
+            onClick={() => setPhase("send-scan")}
             className={buttonClass}
           >
             Lanjut: scan balasan
@@ -220,10 +221,10 @@ export function SyncSection() {
         </div>
       )}
 
-      {phase === "sender-answer" && (
+      {phase === "send-scan" && (
         <div className="mt-3 flex flex-col items-center gap-2">
           <p className="text-xs font-bold">
-            Langkah 2: scan kode balasan dari HP penerima.
+            Langkah 2: pindai kode balasan dari HP satunya.
           </p>
           <QrScanner onResult={senderScanned} />
           <button
@@ -236,10 +237,10 @@ export function SyncSection() {
         </div>
       )}
 
-      {phase === "receiver-scan" && (
+      {phase === "recv-scan" && (
         <div className="mt-3 flex flex-col items-center gap-2">
           <p className="text-xs font-bold">
-            Langkah 1: scan kode dari HP pengirim.
+            Langkah 1: pindai kode dari HP yang menampilkan kode.
           </p>
           <QrScanner onResult={receiverScanned} />
           <button
@@ -252,14 +253,14 @@ export function SyncSection() {
         </div>
       )}
 
-      {phase === "receiver-answer" && (
+      {phase === "recv-answer" && (
         <div className="mt-3 flex flex-col items-center gap-2">
           <p className="text-xs font-bold">
-            Langkah 2: minta HP pengirim scan kode balasan ini.
+            Langkah 2: minta HP satunya pindai kode balasan ini.
           </p>
           <QrCode value={qrValue} />
           <ManualCode value={qrValue} />
-          <p className="text-xs text-ink-soft">Menunggu data masuk...</p>
+          <p className="text-xs text-ink-soft">Menunggu tersambung...</p>
           <button
             type="button"
             onClick={reset}
@@ -270,13 +271,9 @@ export function SyncSection() {
         </div>
       )}
 
-      {busy && (
+      {phase === "syncing" && (
         <div className="mt-3 flex flex-col items-center gap-2">
-          <p className="text-xs font-bold">
-            {phase === "sender-transfer"
-              ? "Mengirim data..."
-              : "Menerima data..."}
-          </p>
+          <p className="text-xs font-bold">Menyinkronkan data...</p>
           <div className="h-2 w-full overflow-hidden rounded-full bg-canvas">
             <div
               className="h-full bg-primary transition-all"
@@ -294,7 +291,7 @@ export function SyncSection() {
             <ul className="text-xs text-ink-soft">
               <li>Transaksi baru: {summary.transactions}</li>
               <li>Pengeluaran baru: {summary.expenses}</li>
-              <li>Member baru: {summary.customers}</li>
+              <li>Member baru/berubah: {summary.customers}</li>
               <li>Klaim loyalitas: {summary.loyaltyClaims}</li>
               <li>Produk/varian baru: {summary.products + summary.variants}</li>
               <li>Dihapus: {summary.deleted}</li>

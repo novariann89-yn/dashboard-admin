@@ -33,6 +33,7 @@ export async function createCustomer(input: {
     nameNormal: normalizeName(name),
     phoneNormal,
     active: true,
+    updatedAt: Date.now(),
   };
 
   await db.customers.add(customer);
@@ -47,7 +48,7 @@ export async function updateCustomer(
   const current = await db.customers.get(id);
   if (!current) return;
 
-  const next: Partial<Customer> = { ...patch };
+  const next: Partial<Customer> = { ...patch, updatedAt: Date.now() };
 
   if (patch.name !== undefined) {
     next.name = patch.name.trim();

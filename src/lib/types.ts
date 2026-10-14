@@ -24,6 +24,7 @@ export interface Product {
   active: boolean;
   sortOrder: number;
   createdAt: number;
+  updatedAt: number;
 }
 
 export interface ProductVariant {
@@ -37,6 +38,7 @@ export interface ProductVariant {
   active: boolean;
   sortOrder: number;
   createdAt: number;
+  updatedAt: number;
 }
 
 export interface Customer {
@@ -45,6 +47,7 @@ export interface Customer {
   phoneNormal: string;
   nameNormal: string;
   active: boolean;
+  updatedAt: number;
 }
 
 export interface Transaction {

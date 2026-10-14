@@ -12,8 +12,8 @@ async function clearAll() {
 async function seed() {
   const db = getDb();
   await db.customers.bulkAdd([
-    { id: "c1", name: "Budi", phoneNormal: "0811", nameNormal: "budi", active: true },
-    { id: "c2", name: "Sari", phoneNormal: "0822", nameNormal: "sari", active: true },
+    { id: "c1", name: "Budi", phoneNormal: "0811", nameNormal: "budi", active: true, updatedAt: 1 },
+    { id: "c2", name: "Sari", phoneNormal: "0822", nameNormal: "sari", active: true, updatedAt: 1 },
   ]);
 }
 

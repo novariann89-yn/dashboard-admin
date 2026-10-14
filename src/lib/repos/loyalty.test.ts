@@ -25,6 +25,7 @@ async function seedMember() {
     active: true,
     sortOrder: 1,
     createdAt: now,
+    updatedAt: now,
   });
   await db.productVariants.add({
     id: "v1",
@@ -37,6 +38,7 @@ async function seedMember() {
     active: true,
     sortOrder: 1,
     createdAt: now,
+    updatedAt: now,
   });
   await db.customers.add({
     id: "c1",
@@ -44,6 +46,7 @@ async function seedMember() {
     phoneNormal: "0811",
     nameNormal: "budi",
     active: true,
+    updatedAt: now,
   });
 }
 

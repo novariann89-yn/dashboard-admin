@@ -130,6 +130,7 @@ export async function createTransaction(
         if (current) {
           await db.productVariants.update(line.variant.id, {
             stock: Math.max(0, current.stock - line.qty),
+            updatedAt: Date.now(),
           });
         }
       }
@@ -238,6 +239,7 @@ export async function cancelLastTransaction(
     if (variant) {
       await db.productVariants.update(item.variantId, {
         stock: variant.stock + item.qty,
+        updatedAt: Date.now(),
       });
     }
   }

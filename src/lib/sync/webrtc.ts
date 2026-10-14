@@ -15,6 +15,7 @@ interface SyncMessage {
   t?: string;
   bytes?: number;
   chunks?: number;
+  d?: string;
   got?: number;
   message?: string;
 }
@@ -123,134 +124,137 @@ export function waitForOpen(channel: RTCDataChannel): Promise<void> {
   });
 }
 
-export async function sendPayload(
+// Symmetric transfer: sends `payload` while receiving the peer's payload over the
+// same data channel. Resolves with the peer's payload once BOTH directions finish.
+// Every message is tagged (meta/chunk/ack/done/error) so the two directions do
+// not collide on one channel.
+export function exchange(
   channel: RTCDataChannel,
   payload: HistoryPayload,
   onProgress?: (percent: number) => void,
-): Promise<void> {
+): Promise<HistoryPayload> {
   const text = JSON.stringify(payload);
   const chunks: string[] = [];
   for (let i = 0; i < text.length; i += CHUNK_SIZE) {
     chunks.push(text.slice(i, i + CHUNK_SIZE));
   }
 
-  await new Promise<void>((resolve, reject) => {
+  return new Promise<HistoryPayload>((resolve, reject) => {
+    let settled = false;
     let stopped = false;
+    let expected = -1;
+    let bytes = -1;
+    let received: HistoryPayload | null = null;
+    let peerDone = false;
+    let shown = 0;
+    const parts: string[] = [];
     let timer: ReturnType<typeof setTimeout>;
-    const resetStall = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        cleanup();
-        reject(new Error("Koneksi macet, coba lagi"));
-      }, STALL_MS);
+
+    const advance = (percent: number) => {
+      if (percent > shown) {
+        shown = percent;
+        onProgress?.(percent);
+      }
+    };
+    const safeSend = (message: SyncMessage) => {
+      if (channel.readyState === "open") channel.send(JSON.stringify(message));
     };
     const cleanup = () => {
       stopped = true;
       clearTimeout(timer);
       channel.removeEventListener("message", onMessage);
     };
-    const onMessage = (event: MessageEvent) => {
-      const msg = parseMessage(event.data);
-      if (!msg) return;
-      if (msg.t === "ack" && typeof msg.got === "number") {
-        onProgress?.(Math.min(99, Math.round((msg.got / chunks.length) * 100)));
-        resetStall();
-      } else if (msg.t === "done") {
-        onProgress?.(100);
-        cleanup();
-        resolve();
-      } else if (msg.t === "error") {
-        cleanup();
-        reject(new Error(msg.message || "Penerima gagal menyimpan data"));
-      }
-    };
-
-    channel.addEventListener("message", onMessage);
-    resetStall();
-    channel.send(
-      JSON.stringify({ t: "meta", bytes: text.length, chunks: chunks.length }),
-    );
-
-    void (async () => {
-      for (const chunk of chunks) {
-        if (stopped) return;
-        await waitForBuffer(channel);
-        channel.send(chunk);
-      }
-    })().catch((error) => {
-      cleanup();
-      reject(error instanceof Error ? error : new Error("Gagal mengirim"));
-    });
-  });
-}
-
-export function receivePayload(
-  channel: RTCDataChannel,
-  onProgress?: (percent: number) => void,
-): Promise<HistoryPayload> {
-  return new Promise((resolve, reject) => {
-    let expected = -1;
-    let bytes = -1;
-    let settled = false;
-    const parts: string[] = [];
-
-    const safeSend = (message: SyncMessage) => {
-      if (channel.readyState === "open") channel.send(JSON.stringify(message));
-    };
     const fail = (message: string) => {
       if (settled) return;
       settled = true;
       safeSend({ t: "error", message });
+      cleanup();
       reject(new Error(message));
     };
-    const finish = () => {
-      if (settled) return;
+    const resetStall = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fail("Koneksi macet, coba lagi"), STALL_MS);
+    };
+    const maybeResolve = () => {
+      if (settled || !received || !peerDone) return;
       settled = true;
-      const text = parts.join("");
+      cleanup();
+      advance(100);
+      resolve(received);
+    };
+    const finishReceive = () => {
+      if (settled) return;
+      const joined = parts.join("");
       // ponytail: SCTP data channels are ordered+reliable, so a length check
       // catches truncation; add a hash only if corruption is ever observed.
-      if (bytes >= 0 && text.length !== bytes) {
-        safeSend({ t: "error", message: "Panjang data tidak cocok" });
-        reject(new Error("Data sinkron rusak"));
+      if (bytes >= 0 && joined.length !== bytes) {
+        fail("Data sinkron rusak");
         return;
       }
-      let parsed: HistoryPayload;
       try {
-        parsed = JSON.parse(text) as HistoryPayload;
+        received = JSON.parse(joined) as HistoryPayload;
       } catch {
-        safeSend({ t: "error", message: "Data sinkron rusak" });
-        reject(new Error("Data sinkron rusak"));
+        fail("Data sinkron rusak");
         return;
       }
       safeSend({ t: "done" });
-      resolve(parsed);
+      maybeResolve();
     };
 
-    channel.onmessage = (event) => {
+    const onMessage = (event: MessageEvent) => {
       if (settled) return;
-      const data = String(event.data);
-      if (expected < 0) {
-        const meta = parseMessage(data);
-        if (meta?.t === "meta" && typeof meta.chunks === "number") {
-          expected = meta.chunks;
-          bytes = typeof meta.bytes === "number" ? meta.bytes : -1;
-          if (expected === 0) finish();
-          return;
+      resetStall();
+      const msg = parseMessage(event.data);
+      if (!msg) return;
+      switch (msg.t) {
+        case "meta":
+          if (typeof msg.chunks === "number") {
+            expected = msg.chunks;
+            bytes = typeof msg.bytes === "number" ? msg.bytes : -1;
+            if (expected === 0) finishReceive();
+          }
+          break;
+        case "chunk": {
+          if (expected < 0) break;
+          parts.push(msg.d ?? "");
+          const got = parts.length;
+          if (got % ACK_EVERY === 0) safeSend({ t: "ack", got });
+          advance(Math.min(99, Math.round((got / expected) * 100)));
+          if (got >= expected) finishReceive();
+          break;
         }
-        fail("Data sinkron tidak valid");
-        return;
+        case "ack":
+          if (typeof msg.got === "number") {
+            advance(Math.min(99, Math.round((msg.got / chunks.length) * 100)));
+          }
+          break;
+        case "done":
+          peerDone = true;
+          maybeResolve();
+          break;
+        case "error":
+          fail(msg.message || "Penerima gagal menyimpan data");
+          break;
       }
-      parts.push(data);
-      const got = parts.length;
-      if (got % ACK_EVERY === 0) safeSend({ t: "ack", got });
-      onProgress?.(Math.min(99, Math.round((got / expected) * 100)));
-      if (got >= expected) finish();
     };
 
+    channel.addEventListener("message", onMessage);
     channel.onerror = () => fail("Koneksi gagal");
     channel.onclose = () => {
       if (!settled) reject(new Error("Koneksi terputus"));
     };
+    resetStall();
+
+    safeSend({ t: "meta", bytes: text.length, chunks: chunks.length });
+    void (async () => {
+      for (const chunk of chunks) {
+        if (stopped) return;
+        await waitForBuffer(channel);
+        channel.send(JSON.stringify({ t: "chunk", d: chunk }));
+      }
+    })().catch((error) => {
+      fail(error instanceof Error ? error.message : "Gagal mengirim");
+    });
   });
 }
 

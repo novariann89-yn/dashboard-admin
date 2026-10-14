@@ -48,6 +48,29 @@ export class TokoDB extends Dexie {
     this.version(3).stores({
       tombstones: "key, table, recordId, deletedAt",
     });
+    this.version(4).upgrade((tx) => {
+      const now = Date.now();
+      return Promise.all([
+        tx
+          .table("products")
+          .toCollection()
+          .modify((row: Record<string, number>) => {
+            row.updatedAt = row.createdAt ?? now;
+          }),
+        tx
+          .table("productVariants")
+          .toCollection()
+          .modify((row: Record<string, number>) => {
+            row.updatedAt = row.createdAt ?? now;
+          }),
+        tx
+          .table("customers")
+          .toCollection()
+          .modify((row: Record<string, number>) => {
+            row.updatedAt = row.updatedAt ?? now;
+          }),
+      ]);
+    });
   }
 }
 

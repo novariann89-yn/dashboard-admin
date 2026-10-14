@@ -20,6 +20,7 @@ async function seedHistory() {
     active: true,
     sortOrder: 1,
     createdAt: now,
+    updatedAt: now,
   });
   await db.productVariants.add({
     id: "v1",
@@ -32,6 +33,7 @@ async function seedHistory() {
     active: true,
     sortOrder: 1,
     createdAt: now,
+    updatedAt: now,
   });
   await db.transactions.add({
     id: "t1",
@@ -80,6 +82,7 @@ async function seedHistory() {
     phoneNormal: "08123",
     nameNormal: "budi",
     active: true,
+    updatedAt: now,
   });
   await db.settings.add({ key: "storeName", value: "Toko" });
 }

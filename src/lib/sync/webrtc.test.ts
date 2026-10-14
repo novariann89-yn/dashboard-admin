@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { HistoryPayload } from "./payload";
-import { receivePayload, sendPayload } from "./webrtc";
+import { exchange } from "./webrtc";
 
 class FakeChannel {
   peer!: FakeChannel;
@@ -9,6 +9,8 @@ class FakeChannel {
   bufferedAmount = 0;
   bufferedAmountLowThreshold = 0;
   onmessage: ((event: { data: unknown }) => void) | null = null;
+  onerror: (() => void) | null = null;
+  onclose: (() => void) | null = null;
   private listeners = new Set<(event: { data: unknown }) => void>();
 
   send(data: unknown) {
@@ -53,23 +55,28 @@ function payload(app = "dashboard-admin-sync"): HistoryPayload {
   };
 }
 
-describe("sync payload transfer", () => {
-  it("round-trips a small payload and acks completion", async () => {
-    const [sender, receiver] = pair();
-    let senderProgress = 0;
-    const received = receivePayload(receiver);
-    await sendPayload(sender, payload(), (percent) => {
-      senderProgress = percent;
-    });
-    assert.deepEqual(await received, payload());
-    assert.equal(senderProgress, 100);
+describe("sync exchange", () => {
+  it("exchanges payloads in both directions", async () => {
+    const [a, b] = pair();
+    const pa = payload("A");
+    const pb = payload("B");
+    const [fromB, fromA] = await Promise.all([
+      exchange(a, pa),
+      exchange(b, pb),
+    ]);
+    assert.deepEqual(fromB, pb);
+    assert.deepEqual(fromA, pa);
   });
 
   it("handles multi-chunk payloads with acks", async () => {
-    const [sender, receiver] = pair();
-    const big = payload("x".repeat(500_000)); // ~8+ chunks of 64 KB
-    const received = receivePayload(receiver);
-    await sendPayload(sender, big);
-    assert.deepEqual(await received, big);
+    const [a, b] = pair();
+    const big = payload("x".repeat(500_000));
+    const small = payload("B");
+    const [fromB, fromA] = await Promise.all([
+      exchange(a, big),
+      exchange(b, small),
+    ]);
+    assert.deepEqual(fromB, small);
+    assert.deepEqual(fromA, big);
   });
 });
