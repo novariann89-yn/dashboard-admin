@@ -1,4 +1,5 @@
 import type { HistoryPayload } from "./payload";
+import { SYNC_VERSION } from "./payload";
 import {
   decodeSignal,
   encodeSignal,
@@ -41,10 +42,25 @@ export interface ReceiverSession {
   channel: Promise<RTCDataChannel>;
 }
 
-function createPeer(): RTCPeerConnection {
-  // ponytail: no STUN/TURN (no third party). Same-WiFi host candidates suffice;
-  // add a STUN server only if cross-network sync is ever needed.
-  return new RTCPeerConnection({ iceServers: [] });
+function createPeer(iceServers: RTCIceServer[] = []): RTCPeerConnection {
+  // ponytail: empty ICE by default (LAN host candidates, no third party). The
+  // owner can paste STUN/TURN in Setting for AP-isolated / cross-network setups.
+  return new RTCPeerConnection({ iceServers });
+}
+
+export function parseIceServers(text: string): RTCIceServer[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (entry): entry is RTCIceServer =>
+        !!entry && typeof entry === "object" && "urls" in entry,
+    );
+  } catch {
+    return [];
+  }
 }
 
 function waitForIceGathering(
@@ -65,8 +81,11 @@ function waitForIceGathering(
   });
 }
 
-export async function startSender(pw: string): Promise<SenderSession> {
-  const pc = createPeer();
+export async function startSender(
+  pw: string,
+  iceServers: RTCIceServer[] = [],
+): Promise<SenderSession> {
+  const pc = createPeer(iceServers);
   const channel = pc.createDataChannel("sync", { ordered: true });
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
@@ -74,6 +93,7 @@ export async function startSender(pw: string): Promise<SenderSession> {
   const code = await encodeSignal({
     sdp: pc.localDescription as RTCSessionDescriptionInit,
     pw,
+    v: SYNC_VERSION,
   });
   return { pc, code, channel };
 }
@@ -84,18 +104,26 @@ export async function finishSender(
   pw: string,
 ): Promise<void> {
   const answer = await decodeSignal(answerCode);
+  assertVersion(answer);
   assertPassword(answer, pw);
+  assertSignalType(answer, "answer");
+  if (session.pc.signalingState !== "have-local-offer") {
+    throw new Error("Sesi sudah terpakai — tap Batal lalu ulangi");
+  }
   await session.pc.setRemoteDescription(answer.sdp);
 }
 
 export async function startReceiver(
   offerCode: string,
   pw: string,
+  iceServers: RTCIceServer[] = [],
 ): Promise<ReceiverSession> {
   const offer = await decodeSignal(offerCode);
+  assertVersion(offer);
   assertPassword(offer, pw);
+  assertSignalType(offer, "offer");
 
-  const pc = createPeer();
+  const pc = createPeer(iceServers);
   const channel = new Promise<RTCDataChannel>((resolve) => {
     pc.ondatachannel = (event) => resolve(event.channel);
   });
@@ -106,6 +134,7 @@ export async function startReceiver(
   const answerCode = await encodeSignal({
     sdp: pc.localDescription as RTCSessionDescriptionInit,
     pw,
+    v: SYNC_VERSION,
   });
   return { pc, answerCode, channel };
 }
@@ -114,6 +143,41 @@ function assertPassword(signal: SignalData, pw: string): void {
   if (signal.pw !== pw) {
     throw new Error("Sandi sinkron tidak cocok dengan HP lain");
   }
+}
+
+function assertVersion(signal: SignalData): void {
+  if (signal.v !== SYNC_VERSION) {
+    throw new Error("Versi aplikasi beda — perbarui aplikasi di kedua HP");
+  }
+}
+
+export function assertSignalType(
+  signal: SignalData,
+  expected: RTCSdpType,
+): void {
+  if (signal.sdp?.type !== expected) {
+    throw new Error(
+      expected === "offer"
+        ? "Ini Kode 2 (balasan), bukan Kode 1. Di HP satunya tap 'Tampilkan kode' dulu"
+        : "Ini Kode 1 (pengirim), bukan Kode 2. Di HP satunya tap 'Scan kode' dulu",
+    );
+  }
+}
+
+// Combined DTLS fingerprint of both ends (like PairDrop) so both phones can
+// eyeball that no man-in-the-middle sits between them.
+export function connectionHash(pc: RTCPeerConnection): string {
+  const local = fingerprint(pc.localDescription?.sdp);
+  const remote = fingerprint(pc.remoteDescription?.sdp);
+  if (!local || !remote) return "";
+  const hex = (local + remote).replace(/[^0-9a-fA-F]/g, "").toUpperCase();
+  return hex.slice(0, 16).replace(/(.{4})(?=.)/g, "$1 ");
+}
+
+function fingerprint(sdp?: string): string {
+  if (!sdp) return "";
+  const line = sdp.split(/\r?\n/).find((l) => l.startsWith("a=fingerprint:"));
+  return line ? line.replace("a=fingerprint:", "").trim() : "";
 }
 
 export function waitForOpen(channel: RTCDataChannel): Promise<void> {

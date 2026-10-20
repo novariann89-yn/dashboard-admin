@@ -57,7 +57,7 @@ After code changes, run `npm run restart` so the phone gets the update.
   image data URL + position/dim in the `settings` table (keys `backgroundImage`,
   `backgroundPosition`, `backgroundDim`) and applies it to `document.body` on load
   (`(app)/layout.tsx`); it is backup-safe and independent of light/dark theme.
-- Offline/PWA: `public/sw.js` (app-shell cache `dashboard-admin-v4`, network-first
+- Offline/PWA: `public/sw.js` (app-shell cache `dashboard-admin-v5`, network-first
   navigation) registered by `src/components/pwa-register.tsx` **only in secure contexts**
   (HTTPS/localhost), so LAN HTTP keeps working. `src/app/manifest.ts` provides the manifest.
 - `src/lib/backup.ts` — JSON export/import across **all** Dexie tables; restore clears the
@@ -72,9 +72,18 @@ After code changes, run `npm run restart` so the phone gets the update.
   `components/qr-code.tsx` (`qrcode` dep), scan `components/qr-scan.tsx` (native
   `BarcodeDetector` + manual fallback). DB v3 `tombstones`, v4 `updatedAt` on
   products/variants/customers; delete fns in `repos/{transactions,expenses,customers,products}.ts`
-  write tombstones. Users/settings are NOT synced (stay per-phone). Requires HTTPS
-  (secure context). `ponytail`: LWW stock is correct only while the two phones **take
-  turns** selling; simultaneous selling needs event-sourced `stockEvents`.
+  write tombstones. Users/settings are NOT synced (stay per-phone). The signal carries a
+  **protocol version** (`SYNC_VERSION`, currently 2) — mismatched builds fail with a
+  "perbarui aplikasi" message instead of timing out. Optional **STUN/TURN** (`settings.iceServers`,
+  JSON `RTCIceServer[]`, empty = LAN-only). SyncSection shows a **"Diagnostik"** panel
+  (WebRTC/ICE state, last payload size, last-synced time) and a shared **connection
+  fingerprint** both phones compare. The two codes are labelled **"Kode 1 (pengirim)" /
+  "Kode 2 (balasan)"** with Salin/Tempel buttons; the signal is validated (SDP type +
+  `signalingState`) so a wrong/swapped code gives a clear message instead of a raw
+  `setRemoteDescription` error. Requires HTTPS (secure context); the QR scanner needs a
+  Chromium browser (`BarcodeDetector`), otherwise use the manual codes. `ponytail`: LWW stock
+  is correct only while the two phones **take turns** selling; simultaneous selling needs
+  event-sourced `stockEvents`.
 - Tests use `fake-indexeddb/auto` (import it before any repo/db import) and
   `resetDbInstance()` between tests.
 

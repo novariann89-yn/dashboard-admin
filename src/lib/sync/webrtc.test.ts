@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { HistoryPayload } from "./payload";
-import { exchange } from "./webrtc";
+import { assertSignalType, exchange, parseIceServers } from "./webrtc";
 
 class FakeChannel {
   peer!: FakeChannel;
@@ -54,6 +54,30 @@ function payload(app = "dashboard-admin-sync"): HistoryPayload {
     tombstones: [],
   };
 }
+
+describe("assertSignalType", () => {
+  it("rejects the wrong SDP type with a clear message", () => {
+    const offer = {
+      sdp: { type: "offer", sdp: "" } as RTCSessionDescriptionInit,
+      pw: "x",
+      v: 2,
+    };
+    assert.throws(() => assertSignalType(offer, "answer"), /Kode 1 \(pengirim\)/);
+    assert.doesNotThrow(() => assertSignalType(offer, "offer"));
+  });
+});
+
+describe("parseIceServers", () => {
+  it("parses a valid JSON array and ignores junk", () => {
+    assert.deepEqual(parseIceServers('[{"urls":"stun:x:3478"}]'), [
+      { urls: "stun:x:3478" },
+    ]);
+    assert.deepEqual(parseIceServers(""), []);
+    assert.deepEqual(parseIceServers("not json"), []);
+    assert.deepEqual(parseIceServers("{}"), []);
+    assert.deepEqual(parseIceServers('[{"nope":1}]'), []);
+  });
+});
 
 describe("sync exchange", () => {
   it("exchanges payloads in both directions", async () => {

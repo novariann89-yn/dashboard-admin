@@ -61,6 +61,19 @@ HTTPS. Di HP, install `certs/ca.crt` sekali saja: pindahkan file ke HP
 Catatan: cert berisi IP saat ini. Jika IP berubah, jalankan `npm run cert` lagi.
 `certs/ca.key` & `certs/server.key` tidak pernah di-commit (`.gitignore`).
 
+## Sinkron antar HP (P2P, tanpa internet)
+
+Fitur **Setting → Sinkron HP** memindahkan/menyatukan data antar dua perangkat lewat WiFi yang sama.
+
+- Kedua HP buka aplikasi ini, **sandi sinkron sama**, lalu satu HP tap **Tampilkan kode**
+  dan HP lain **Scan kode** (lalu tukar balasan).
+- **Kamera** (scan QR) hanya jalan di **HTTPS tepercaya** dan browser **Chromium**
+  (Chrome/Brave). Kalau tidak bisa, pakai **Kode 1 / Kode 2** manual (tombol Salin/Tempel).
+- Kedua aplikasi harus terbuka bersamaan dan satu WiFi (router tidak memisahkan antar
+  klien). Kalau gagal, cek panel **Diagnostik** (status koneksi/ICE).
+- Butuh HTTPS: pakai URL Vercel, atau sertifikat LAN tepercaya (`npm run cert`, pasang
+  `certs/ca.crt` di kedua perangkat).
+
 ## Update aplikasi
 
 ```bash

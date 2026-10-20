@@ -1,6 +1,7 @@
 export interface SignalData {
   sdp: RTCSessionDescriptionInit;
   pw: string;
+  v: number;
 }
 
 export async function hashPassword(password: string): Promise<string> {

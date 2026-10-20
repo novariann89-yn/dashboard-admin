@@ -39,7 +39,9 @@ export async function resetData(scope: ResetScope): Promise<void> {
       }
       if (scope.loyaltyClaims) await db.loyaltyClaims.clear();
       if (scope.resetStock) {
-        await db.productVariants.toCollection().modify({ stock: 0 });
+        await db.productVariants
+          .toCollection()
+          .modify({ stock: 0, updatedAt: Date.now() });
       }
     },
   );

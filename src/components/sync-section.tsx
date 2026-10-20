@@ -1,20 +1,31 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/toast";
 import { QrCode } from "@/components/qr-code";
 import { QrScanner } from "@/components/qr-scan";
-import { buttonClass, cardClass, inputClass, sectionLabelClass } from "@/components/ui";
+import {
+  badgeClass,
+  buttonClass,
+  cardClass,
+  inputClass,
+  sectionLabelClass,
+} from "@/components/ui";
+import { formatDateTime } from "@/lib/format";
+import { getSettings, updateSettings } from "@/lib/settings";
 import { hashPassword } from "@/lib/sync/signaling";
 import {
   applyHistoryPayload,
   buildHistoryPayload,
   isHistoryPayload,
+  SYNC_VERSION,
   type MergeSummary,
 } from "@/lib/sync/payload";
 import {
+  connectionHash,
   exchange,
   finishSender,
+  parseIceServers,
   startReceiver,
   startSender,
   waitForOpen,
@@ -31,11 +42,30 @@ type Phase =
   | "syncing"
   | "done";
 
-function ManualCode({ value }: { value: string }) {
+interface Diag {
+  webRTC: boolean;
+  connState: string;
+  iceState: string;
+  bytes: number;
+  fingerprint: string;
+  lastSync: number;
+}
+
+function ManualCode({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {}
+  }
+
   return (
     <details className="w-full">
       <summary className="cursor-pointer text-xs font-bold text-primary">
-        Tampilkan kode manual
+        Tampilkan {label} (manual)
       </summary>
       <textarea
         readOnly
@@ -44,6 +74,13 @@ function ManualCode({ value }: { value: string }) {
         onFocus={(event) => event.target.select()}
         className="mt-2 w-full rounded-control border border-line bg-surface p-2 text-[10px]"
       />
+      <button
+        type="button"
+        onClick={copy}
+        className="mt-2 w-full rounded-control border-2 border-line py-1.5 text-[11px] font-bold text-ink"
+      >
+        {copied ? "Tersalin ✓" : "Salin kode ini"}
+      </button>
     </details>
   );
 }
@@ -56,15 +93,33 @@ export function SyncSection() {
   const [progress, setProgress] = useState(0);
   const [summary, setSummary] = useState<MergeSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [iceText, setIceText] = useState("");
+  const [diag, setDiag] = useState<Diag>(() => ({
+    webRTC: typeof RTCPeerConnection !== "undefined",
+    connState: "",
+    iceState: "",
+    bytes: 0,
+    fingerprint: "",
+    lastSync: 0,
+  }));
 
   const senderRef = useRef<SenderSession | null>(null);
   const receiverRef = useRef<ReceiverSession | null>(null);
+  const busyRef = useRef(false);
+
+  useEffect(() => {
+    getSettings().then((settings) => {
+      setIceText(settings.iceServers);
+      setDiag((d) => ({ ...d, lastSync: settings.lastSyncedAt }));
+    });
+  }, []);
 
   const reset = useCallback(() => {
     senderRef.current?.pc.close();
     receiverRef.current?.pc.close();
     senderRef.current = null;
     receiverRef.current = null;
+    busyRef.current = false;
     setPhase("idle");
     setQrValue("");
     setProgress(0);
@@ -92,15 +147,44 @@ export function SyncSection() {
     return pw;
   }
 
-  async function runSync(channel: RTCDataChannel) {
+  async function saveIce() {
+    await updateSettings({ iceServers: iceText.trim() });
+    toast("Pengaturan STUN/TURN disimpan");
+  }
+
+  async function runSync(pc: RTCPeerConnection, channel: RTCDataChannel) {
     setPhase("syncing");
-    const theirs = await exchange(channel, await buildHistoryPayload(), setProgress);
-    if (!isHistoryPayload(theirs)) {
-      throw new Error("Data sinkron tidak dikenal");
+    const onState = () =>
+      setDiag((d) => ({
+        ...d,
+        connState: pc.connectionState,
+        iceState: pc.iceConnectionState,
+        fingerprint: connectionHash(pc),
+      }));
+    pc.addEventListener("connectionstatechange", onState);
+    pc.addEventListener("iceconnectionstatechange", onState);
+    onState();
+    try {
+      const mine = await buildHistoryPayload();
+      const theirs = await exchange(channel, mine, setProgress);
+      if (!isHistoryPayload(theirs)) {
+        throw new Error("Versi data beda — perbarui aplikasi di kedua HP");
+      }
+      setSummary(await applyHistoryPayload(theirs));
+      const now = Date.now();
+      await updateSettings({ lastSyncedAt: now });
+      setDiag((d) => ({
+        ...d,
+        bytes: JSON.stringify(mine).length,
+        lastSync: now,
+        fingerprint: connectionHash(pc),
+      }));
+      toast("Sinkron selesai");
+      setPhase("done");
+    } finally {
+      pc.removeEventListener("connectionstatechange", onState);
+      pc.removeEventListener("iceconnectionstatechange", onState);
     }
-    setSummary(await applyHistoryPayload(theirs));
-    toast("Sinkron selesai");
-    setPhase("done");
   }
 
   async function startSend() {
@@ -109,7 +193,10 @@ export function SyncSection() {
     setError(null);
     setSummary(null);
     try {
-      const session = await startSender(await hashPassword(pw));
+      const session = await startSender(
+        await hashPassword(pw),
+        parseIceServers(iceText),
+      );
       senderRef.current = session;
       setQrValue(session.code);
       setPhase("send-offer");
@@ -120,14 +207,17 @@ export function SyncSection() {
 
   async function senderScanned(answerCode: string) {
     const session = senderRef.current;
-    if (!session) return;
+    if (!session || busyRef.current) return;
+    busyRef.current = true;
     setError(null);
     try {
       await finishSender(session, answerCode, await hashPassword(password.trim()));
       await waitForOpen(session.channel);
-      await runSync(session.channel);
+      await runSync(session.pc, session.channel);
     } catch (e) {
       fail(e, "Gagal menyinkron");
+    } finally {
+      busyRef.current = false;
     }
   }
 
@@ -139,20 +229,25 @@ export function SyncSection() {
   }
 
   async function receiverScanned(offerCode: string) {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setError(null);
     try {
       const session = await startReceiver(
         offerCode,
         await hashPassword(password.trim()),
+        parseIceServers(iceText),
       );
       receiverRef.current = session;
       setQrValue(session.answerCode);
       setPhase("recv-answer");
       const channel = await session.channel;
       await waitForOpen(channel);
-      await runSync(channel);
+      await runSync(session.pc, channel);
     } catch (e) {
       fail(e, "Gagal menyinkron");
+    } finally {
+      busyRef.current = false;
     }
   }
 
@@ -203,7 +298,7 @@ export function SyncSection() {
             kode ini.
           </p>
           <QrCode value={qrValue} />
-          <ManualCode value={qrValue} />
+          <ManualCode label="Kode 1 (pengirim)" value={qrValue} />
           <button
             type="button"
             onClick={() => setPhase("send-scan")}
@@ -226,7 +321,10 @@ export function SyncSection() {
           <p className="text-xs font-bold">
             Langkah 2: pindai kode balasan dari HP satunya.
           </p>
-          <QrScanner onResult={senderScanned} />
+          <QrScanner
+            onResult={senderScanned}
+            pasteLabel="Tempel Kode 2 (balasan) dari HP satunya."
+          />
           <button
             type="button"
             onClick={reset}
@@ -242,7 +340,10 @@ export function SyncSection() {
           <p className="text-xs font-bold">
             Langkah 1: pindai kode dari HP yang menampilkan kode.
           </p>
-          <QrScanner onResult={receiverScanned} />
+          <QrScanner
+            onResult={receiverScanned}
+            pasteLabel="Tempel Kode 1 (pengirim) dari HP satunya."
+          />
           <button
             type="button"
             onClick={reset}
@@ -259,7 +360,7 @@ export function SyncSection() {
             Langkah 2: minta HP satunya pindai kode balasan ini.
           </p>
           <QrCode value={qrValue} />
-          <ManualCode value={qrValue} />
+          <ManualCode label="Kode 2 (balasan)" value={qrValue} />
           <p className="text-xs text-ink-soft">Menunggu tersambung...</p>
           <button
             type="button"
@@ -287,6 +388,15 @@ export function SyncSection() {
       {phase === "done" && (
         <div className="mt-3 flex flex-col gap-2">
           <p className="text-sm font-bold text-success">Selesai.</p>
+          {diag.fingerprint && (
+            <p className="text-xs text-ink-soft">
+              Kode koneksi:{" "}
+              <b className="tabular-nums">{diag.fingerprint}</b>
+              <span className="block text-[10px]">
+                Harus sama persis di kedua HP.
+              </span>
+            </p>
+          )}
           {summary && (
             <ul className="text-xs text-ink-soft">
               <li>Transaksi baru: {summary.transactions}</li>
@@ -305,6 +415,47 @@ export function SyncSection() {
       )}
 
       {error && <p className="mt-2 text-xs font-bold text-error">{error}</p>}
+
+      <details className="mt-3 border-t border-line pt-2">
+        <summary className="cursor-pointer text-[11px] font-bold text-primary">
+          Diagnostik
+        </summary>
+        <ul className="mt-1 text-[10px] text-ink-soft">
+          <li>WebRTC: {diag.webRTC ? "didukung" : "tidak didukung"}</li>
+          <li>Versi sinkron: {SYNC_VERSION}</li>
+          <li>Koneksi: {diag.connState || "-"}</li>
+          <li>ICE: {diag.iceState || "-"}</li>
+          <li>
+            Ukuran data terakhir:{" "}
+            {diag.bytes ? `${Math.round(diag.bytes / 1024)} KB` : "-"}
+          </li>
+          <li>
+            Terakhir sinkron:{" "}
+            {diag.lastSync ? formatDateTime(diag.lastSync) : "belum pernah"}
+          </li>
+        </ul>
+      </details>
+
+      <details className="mt-2">
+        <summary className="cursor-pointer text-[11px] font-bold text-primary">
+          Pengaturan lanjutan (STUN/TURN)
+        </summary>
+        <p className="mt-1 text-[10px] text-ink-soft">
+          Kosongkan untuk mode WiFi lokal (bawaan). Isi JSON daftar server ICE
+          kalau router memisahkan antar HP. Contoh:{" "}
+          <code>{`[{"urls":"stun:stun.example.org:3478"}]`}</code>
+        </p>
+        <textarea
+          value={iceText}
+          onChange={(event) => setIceText(event.target.value)}
+          rows={3}
+          placeholder='[{"urls":"stun:..."}]'
+          className={`${inputClass} mt-2 text-[10px]`}
+        />
+        <button type="button" onClick={saveIce} className={`${badgeClass} mt-2`}>
+          Simpan
+        </button>
+      </details>
     </section>
   );
 }

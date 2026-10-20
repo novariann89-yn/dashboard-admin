@@ -9,7 +9,12 @@ import type {
   Transaction,
   TransactionItem,
 } from "../types";
-import { applyHistoryPayload, type HistoryPayload } from "./payload";
+import {
+  applyHistoryPayload,
+  isHistoryPayload,
+  SYNC_VERSION,
+  type HistoryPayload,
+} from "./payload";
 
 async function clearAll() {
   const db = getDb();
@@ -106,7 +111,7 @@ function item(
 function payload(over: Partial<HistoryPayload> = {}): HistoryPayload {
   return {
     app: "dashboard-admin-sync",
-    version: 1,
+    version: SYNC_VERSION,
     sentAt: now,
     transactions: [],
     transactionItems: [],
@@ -121,6 +126,12 @@ function payload(over: Partial<HistoryPayload> = {}): HistoryPayload {
 }
 
 describe("applyHistoryPayload", () => {
+  it("rejects payloads from a different sync version", () => {
+    assert.equal(isHistoryPayload(payload()), true);
+    assert.equal(isHistoryPayload({ ...payload(), version: SYNC_VERSION + 1 }), false);
+    assert.equal(isHistoryPayload({ app: "other", version: SYNC_VERSION }), false);
+  });
+
   it("unions transactions by id and is idempotent", async () => {
     const db = getDb();
     const incoming = payload({

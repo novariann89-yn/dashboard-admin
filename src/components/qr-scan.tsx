@@ -9,10 +9,27 @@ interface BarcodeDetectorLike {
 type ScannerStatus =
   | "starting"
   | "scanning"
-  | "unsupported"
+  | "no-decoder"
+  | "insecure"
   | "denied";
 
-export function QrScanner({ onResult }: { onResult: (value: string) => void }) {
+const STATUS_MESSAGE: Record<ScannerStatus, string> = {
+  starting: "Menyalakan kamera...",
+  scanning: "Arahkan kamera ke kode QR di HP lain.",
+  "no-decoder":
+    "Browser ini tidak bisa memindai QR (coba Chrome/Brave). Pakai kode manual di bawah.",
+  insecure:
+    "Kamera butuh HTTPS tepercaya. Pakai kode manual di bawah.",
+  denied: "Izin kamera ditolak. Pakai kode manual di bawah.",
+};
+
+export function QrScanner({
+  onResult,
+  pasteLabel = "masukkan kode manual",
+}: {
+  onResult: (value: string) => void;
+  pasteLabel?: string;
+}) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const onResultRef = useRef(onResult);
   onResultRef.current = onResult;
@@ -32,8 +49,12 @@ export function QrScanner({ onResult }: { onResult: (value: string) => void }) {
     ).BarcodeDetector;
 
     async function start() {
-      if (!Ctor || !navigator.mediaDevices?.getUserMedia) {
-        setStatus("unsupported");
+      if (!Ctor) {
+        setStatus("no-decoder");
+        return;
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus(window.isSecureContext ? "no-decoder" : "insecure");
         return;
       }
       try {
@@ -74,6 +95,13 @@ export function QrScanner({ onResult }: { onResult: (value: string) => void }) {
     };
   }, []);
 
+  async function pasteFromClipboard() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text.trim()) setManual(text.trim());
+    } catch {}
+  }
+
   return (
     <div className="flex flex-col items-center gap-2">
       <video
@@ -82,22 +110,17 @@ export function QrScanner({ onResult }: { onResult: (value: string) => void }) {
         muted
         className="h-56 w-56 rounded-control border border-line bg-black object-cover"
       />
-      {status === "scanning" && (
-        <p className="text-xs text-ink-soft">Arahkan kamera ke QR di HP lain.</p>
-      )}
-      {status === "starting" && (
-        <p className="text-xs text-ink-soft">Menyalakan kamera...</p>
-      )}
-      {(status === "unsupported" || status === "denied") && (
-        <p className="text-xs text-error">
-          Kamera tidak bisa dipakai. Masukkan kode manual di bawah.
-        </p>
-      )}
+      <p
+        className={`text-xs ${status === "scanning" || status === "starting" ? "text-ink-soft" : "text-error"}`}
+      >
+        {STATUS_MESSAGE[status]}
+      </p>
 
-      <details className="w-full">
+      <details className="w-full" open={status !== "scanning"}>
         <summary className="cursor-pointer text-xs font-bold text-primary">
           Masukkan kode manual
         </summary>
+        <p className="mt-1 text-[11px] text-ink-soft">{pasteLabel}</p>
         <div className="mt-2 flex flex-col gap-2">
           <textarea
             value={manual}
@@ -106,13 +129,22 @@ export function QrScanner({ onResult }: { onResult: (value: string) => void }) {
             placeholder="Tempel kode dari HP lain"
             className="w-full rounded-control border border-line bg-surface p-2 text-xs"
           />
-          <button
-            type="button"
-            onClick={() => manual.trim() && onResult(manual)}
-            className="rounded-control bg-primary py-2 text-sm font-bold text-white"
-          >
-            Pakai kode ini
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={pasteFromClipboard}
+              className="flex-1 rounded-control border-2 border-line py-2 text-sm font-bold text-ink"
+            >
+              Tempel
+            </button>
+            <button
+              type="button"
+              onClick={() => manual.trim() && onResult(manual)}
+              className="flex-1 rounded-control bg-primary py-2 text-sm font-bold text-white"
+            >
+              Pakai kode ini
+            </button>
+          </div>
         </div>
       </details>
     </div>

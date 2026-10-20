@@ -12,7 +12,7 @@ import type {
 import { addTombstones, listTombstones } from "../repos/tombstones";
 
 export const SYNC_APP = "dashboard-admin-sync";
-export const SYNC_VERSION = 1;
+export const SYNC_VERSION = 2;
 
 export interface HistoryPayload {
   app: string;
@@ -68,7 +68,7 @@ export async function buildHistoryPayload(): Promise<HistoryPayload> {
 export function isHistoryPayload(value: unknown): value is HistoryPayload {
   if (!value || typeof value !== "object") return false;
   const payload = value as Partial<HistoryPayload>;
-  return payload.app === SYNC_APP && typeof payload.version === "number";
+  return payload.app === SYNC_APP && payload.version === SYNC_VERSION;
 }
 
 // Last-write-wins for mutable rows. ponytail: relies on device clocks (accepted);
