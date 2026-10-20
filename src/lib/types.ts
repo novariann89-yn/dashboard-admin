@@ -41,6 +41,17 @@ export interface ProductVariant {
   updatedAt: number;
 }
 
+export type StockEventType = "count" | "reset" | "sale" | "restock" | "refund";
+
+export interface StockEvent {
+  id: ID;
+  variantId: ID;
+  type: StockEventType;
+  value: number;
+  refId: ID | null;
+  at: number;
+}
+
 export interface Customer {
   id: ID;
   name: string;

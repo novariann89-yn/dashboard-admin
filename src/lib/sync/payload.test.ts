@@ -121,6 +121,7 @@ function payload(over: Partial<HistoryPayload> = {}): HistoryPayload {
     products: [],
     productVariants: [],
     tombstones: [],
+    stockEvents: [],
     ...over,
   };
 }
@@ -185,24 +186,26 @@ describe("applyHistoryPayload", () => {
     assert.equal((await db.customers.get("c1"))?.name, "Budi Baru");
   });
 
-  it("variant + stock merge is last-write-wins", async () => {
+  it("variant metadata is last-write-wins; peer stock cache is ignored", async () => {
     const db = getDb();
-    await db.productVariants.add(variant({ stock: 10, updatedAt: 100 }));
+    await db.productVariants.add(variant({ stock: 10, sizeName: "Kecil", updatedAt: 100 }));
 
     await applyHistoryPayload(
-      payload({ productVariants: [variant({ stock: 3, updatedAt: 50 })] }),
+      payload({ productVariants: [variant({ stock: 3, sizeName: "Kecil", updatedAt: 50 })] }),
     );
     assert.equal((await db.productVariants.get("v1"))?.stock, 10);
 
     await applyHistoryPayload(
-      payload({ productVariants: [variant({ stock: 3, updatedAt: 200 })] }),
+      payload({ productVariants: [variant({ stock: 3, sizeName: "Besar", updatedAt: 200 })] }),
     );
-    assert.equal((await db.productVariants.get("v1"))?.stock, 3);
+    const merged = await db.productVariants.get("v1");
+    assert.equal(merged?.sizeName, "Besar"); // newer metadata wins
+    assert.equal(merged?.stock, 10); // ...but stock is never carried by metadata LWW
   });
 
   it("converges on equal timestamps (deterministic tie-break)", async () => {
-    const a = variant({ id: "v1", stock: 5, updatedAt: 100 });
-    const b = variant({ id: "v1", stock: 9, updatedAt: 100 });
+    const a = variant({ id: "v1", stock: 5, sizeName: "A", updatedAt: 100 });
+    const b = variant({ id: "v1", stock: 5, sizeName: "B", updatedAt: 100 });
 
     resetDbInstance();
     await clearAll();
@@ -217,6 +220,58 @@ describe("applyHistoryPayload", () => {
     const phone2 = await getDb().productVariants.get("v1");
 
     assert.deepEqual(phone1, phone2);
+  });
+
+  it("sums concurrent sales from two phones instead of losing one", async () => {
+    const db = getDb();
+    const base = { id: "base:v1", variantId: "v1", type: "count" as const, value: 10, refId: null, at: now };
+    const saleA = { id: "eA", variantId: "v1", type: "sale" as const, value: -1, refId: "tA", at: now + 1 };
+    const saleB = { id: "eB", variantId: "v1", type: "sale" as const, value: -2, refId: "tB", at: now + 2 };
+
+    await db.productVariants.add(variant({ id: "v1", stock: 9 }));
+    await applyHistoryPayload(payload({ stockEvents: [base, saleA] }));
+    assert.equal((await db.productVariants.get("v1"))?.stock, 9);
+
+    await applyHistoryPayload(payload({ stockEvents: [base, saleB] }));
+    assert.equal((await db.productVariants.get("v1"))?.stock, 7);
+  });
+
+  it("a later physical count overrides prior history", async () => {
+    const db = getDb();
+    await db.productVariants.add(variant({ id: "v1", stock: 0 }));
+    await applyHistoryPayload(
+      payload({
+        stockEvents: [
+          { id: "base:v1", variantId: "v1", type: "count", value: 10, refId: null, at: now },
+          { id: "s1", variantId: "v1", type: "sale", value: -3, refId: "t1", at: now + 1 },
+          { id: "c1", variantId: "v1", type: "count", value: 20, refId: null, at: now + 2 },
+          { id: "s2", variantId: "v1", type: "sale", value: -2, refId: "t2", at: now + 3 },
+        ],
+      }),
+    );
+    assert.equal((await db.productVariants.get("v1"))?.stock, 18);
+  });
+
+  it("divergent bases with the same id converge on both phones", async () => {
+    const baseA = { id: "base:v1", variantId: "v1", type: "count" as const, value: 10, refId: null, at: 100 };
+    const baseB = { id: "base:v1", variantId: "v1", type: "count" as const, value: 30, refId: null, at: 200 };
+
+    resetDbInstance();
+    await clearAll();
+    await getDb().productVariants.add(variant({ id: "v1", stock: 10 }));
+    await getDb().stockEvents.add(baseA);
+    await applyHistoryPayload(payload({ stockEvents: [baseB] }));
+    const phone1 = await getDb().productVariants.get("v1");
+
+    resetDbInstance();
+    await clearAll();
+    await getDb().productVariants.add(variant({ id: "v1", stock: 30 }));
+    await getDb().stockEvents.add(baseB);
+    await applyHistoryPayload(payload({ stockEvents: [baseA] }));
+    const phone2 = await getDb().productVariants.get("v1");
+
+    assert.equal(phone1?.stock, 30);
+    assert.equal(phone1?.stock, phone2?.stock);
   });
 
   it("adopts new products/variants from the peer", async () => {

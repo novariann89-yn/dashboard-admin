@@ -1,4 +1,4 @@
-const CACHE = "dashboard-admin-v5";
+const CACHE = "dashboard-admin-v6";
 
 const APP_SHELL = [
   "/",

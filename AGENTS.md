@@ -29,14 +29,21 @@ After code changes, run `npm run restart` so the phone gets the update.
 
 - Next.js 16 App Router with `output: "export"` (static HTML/JS). No server actions,
   no API routes, no database server.
-- `src/lib/db.ts` — Dexie schema (versions 1–4) for all tables. `getDb()` is lazy so
+- `src/lib/db.ts` — Dexie schema (versions 1–5) for all tables. `getDb()` is lazy so
   nothing touches IndexedDB during SSR/prerender. `resetDbInstance()` exists for tests.
   Tables: `products`, `productVariants`, `customers`, `transactions`,
-  `transactionItems`, `expenses`, `expensePresets`, `users`, `auditLog`, `settings`.
+  `transactionItems`, `expenses`, `expensePresets`, `users`, `auditLog`, `settings`,
+  `tombstones`, `stockEvents`.
 - `src/lib/repos/*` — data access:
   - `products` — products + variants (`sellPrice`, `costPrice`, `netProfitPerUnit`, `stock`).
   - `transactions` — atomic sale: snapshots price/cost/profit, decrements stock.
-  - `stock` — `listStock`, `stockLevel`, `addStock` (increment), `setStock` (physical count), all audited.
+  - `stock` — `listStock`, `stockLevel`, `addStock` (restock event), `setStock` (physical
+    count event), all audited. Stock is **event-sourced** (`stockEvents`, v5): the append-only
+    log is the truth and `variant.stock` is just a derived cache (`replayStockEvents` /
+    `recomputeStock`). `count`/`reset` events are absolute, `sale`/`restock`/`refund` are
+    signed deltas; a delta on a variant with no base yet first seeds `base:<id>`. This makes
+    concurrent sales on two phones **sum** instead of clobbering (that is why stock is NOT
+    part of the metadata LWW — and stock ops never bump `updatedAt`).
   - `customers`, `expenses`, `audit`.
 - `src/lib/auth.ts` — `login`/`logout`, session in `sessionStorage`, `hasPermission`,
   `createUser`/`updateUser`/`deleteUser`/`changePassword`.
@@ -57,23 +64,24 @@ After code changes, run `npm run restart` so the phone gets the update.
   image data URL + position/dim in the `settings` table (keys `backgroundImage`,
   `backgroundPosition`, `backgroundDim`) and applies it to `document.body` on load
   (`(app)/layout.tsx`); it is backup-safe and independent of light/dark theme.
-- Offline/PWA: `public/sw.js` (app-shell cache `dashboard-admin-v5`, network-first
+- Offline/PWA: `public/sw.js` (app-shell cache `dashboard-admin-v6`, network-first
   navigation) registered by `src/components/pwa-register.tsx` **only in secure contexts**
   (HTTPS/localhost), so LAN HTTP keeps working. `src/app/manifest.ts` provides the manifest.
 - `src/lib/backup.ts` — JSON export/import across **all** Dexie tables; restore clears the
   legacy PIN keys. `src/lib/format.ts`, `src/lib/id.ts`, `src/lib/csv.ts`, `src/lib/receipt.ts`,
   `src/lib/pricing.ts` (rounding/margin/change) are pure helpers.
 - Sync (two-way, LAN): `src/lib/sync/payload.ts` (merge engine: history
-  union by id; deletes-win via `tombstones`; products/variants/customers **and stock**
-  are last-write-wins by `updatedAt` with a deterministic content tie-break), `src/lib/sync/webrtc.ts`
+  union by id; deletes-win via `tombstones`; products/variants/customers metadata
+  are last-write-wins by `updatedAt` with a deterministic content tie-break; **stock**
+  is `stockEvents` union by id + `recomputeStock`, so concurrent sales sum), `src/lib/sync/webrtc.ts`
   (`exchange()` sends + receives over one channel; 64 KB chunks, receiver acks/progress,
   length check, stall timeout), `src/lib/sync/signaling.ts` (SDP deflate + password SHA-256).
   UI: owner-only `SyncSection` in Setting — **"Tampilkan kode" / "Scan kode"**; QR render
   `components/qr-code.tsx` (`qrcode` dep), scan `components/qr-scan.tsx` (native
   `BarcodeDetector` + manual fallback). DB v3 `tombstones`, v4 `updatedAt` on
-  products/variants/customers; delete fns in `repos/{transactions,expenses,customers,products}.ts`
+  products/variants/customers, v5 `stockEvents`; delete fns in `repos/{transactions,expenses,customers,products}.ts`
   write tombstones. Users/settings are NOT synced (stay per-phone). The signal carries a
-  **protocol version** (`SYNC_VERSION`, currently 2) — mismatched builds fail with a
+  **protocol version** (`SYNC_VERSION`, currently 3) — mismatched builds fail with a
   "perbarui aplikasi" message instead of timing out. Optional **STUN/TURN** (`settings.iceServers`,
   JSON `RTCIceServer[]`, empty = LAN-only). SyncSection shows a **"Diagnostik"** panel
   (WebRTC/ICE state, last payload size, last-synced time) and a shared **connection
@@ -81,9 +89,9 @@ After code changes, run `npm run restart` so the phone gets the update.
   "Kode 2 (balasan)"** with Salin/Tempel buttons; the signal is validated (SDP type +
   `signalingState`) so a wrong/swapped code gives a clear message instead of a raw
   `setRemoteDescription` error. Requires HTTPS (secure context); the QR scanner needs a
-  Chromium browser (`BarcodeDetector`), otherwise use the manual codes. `ponytail`: LWW stock
-  is correct only while the two phones **take turns** selling; simultaneous selling needs
-  event-sourced `stockEvents`.
+  Chromium browser (`BarcodeDetector`), otherwise use the manual codes. `ponytail`: transaction
+  **cancel** is still union-by-id, so a cancel done after a sync does not update the flag on the
+  peer (the `refund` stock event still applies); `stockEvents` is never compacted.
 - Tests use `fake-indexeddb/auto` (import it before any repo/db import) and
   `resetDbInstance()` between tests.
 

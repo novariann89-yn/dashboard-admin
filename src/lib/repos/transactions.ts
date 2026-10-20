@@ -5,6 +5,7 @@ import { computeTotals } from "../pricing";
 import { getSettings } from "../settings";
 import { logAudit } from "./audit";
 import { addTombstones } from "./tombstones";
+import { appendStockEvent } from "./stock";
 import type {
   BuyerType,
   PaymentMethod,
@@ -120,19 +121,13 @@ export async function createTransaction(
 
   await db.transaction(
     "rw",
-    [db.transactions, db.transactionItems, db.productVariants],
+    [db.transactions, db.transactionItems, db.productVariants, db.stockEvents],
     async () => {
       await db.transactions.add(transaction);
       await db.transactionItems.bulkAdd(items);
 
       for (const line of prepared) {
-        const current = await db.productVariants.get(line.variant.id);
-        if (current) {
-          await db.productVariants.update(line.variant.id, {
-            stock: Math.max(0, current.stock - line.qty),
-            updatedAt: Date.now(),
-          });
-        }
+        await appendStockEvent(line.variant.id, "sale", -line.qty, transaction.id);
       }
     },
   );
@@ -237,10 +232,7 @@ export async function cancelLastTransaction(
   for (const item of items) {
     const variant = await db.productVariants.get(item.variantId);
     if (variant) {
-      await db.productVariants.update(item.variantId, {
-        stock: variant.stock + item.qty,
-        updatedAt: Date.now(),
-      });
+      await appendStockEvent(item.variantId, "refund", item.qty, latest.id);
     }
   }
 

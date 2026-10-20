@@ -8,6 +8,7 @@ import type {
   Product,
   ProductVariant,
   Setting,
+  StockEvent,
   Tombstone,
   Transaction,
   TransactionItem,
@@ -27,6 +28,7 @@ export class TokoDB extends Dexie {
   settings!: Table<Setting, string>;
   loyaltyClaims!: Table<LoyaltyClaim, string>;
   tombstones!: Table<Tombstone, string>;
+  stockEvents!: Table<StockEvent, string>;
 
   constructor() {
     super("toko-db");
@@ -70,6 +72,9 @@ export class TokoDB extends Dexie {
             row.updatedAt = row.updatedAt ?? now;
           }),
       ]);
+    });
+    this.version(5).stores({
+      stockEvents: "id, variantId, at, type",
     });
   }
 }

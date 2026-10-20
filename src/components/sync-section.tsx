@@ -404,6 +404,7 @@ export function SyncSection() {
               <li>Member baru/berubah: {summary.customers}</li>
               <li>Klaim loyalitas: {summary.loyaltyClaims}</li>
               <li>Produk/varian baru: {summary.products + summary.variants}</li>
+              <li>Peristiwa stok: {summary.stockEvents}</li>
               <li>Dihapus: {summary.deleted}</li>
               <li>Dilewati (sudah ada): {summary.skipped}</li>
             </ul>

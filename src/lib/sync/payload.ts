@@ -5,14 +5,16 @@ import type {
   LoyaltyClaim,
   Product,
   ProductVariant,
+  StockEvent,
   Tombstone,
   Transaction,
   TransactionItem,
 } from "../types";
 import { addTombstones, listTombstones } from "../repos/tombstones";
+import { recomputeStock } from "../repos/stock";
 
 export const SYNC_APP = "dashboard-admin-sync";
-export const SYNC_VERSION = 2;
+export const SYNC_VERSION = 3;
 
 export interface HistoryPayload {
   app: string;
@@ -26,6 +28,7 @@ export interface HistoryPayload {
   products: Product[];
   productVariants: ProductVariant[];
   tombstones: Tombstone[];
+  stockEvents: StockEvent[];
 }
 
 export async function buildHistoryPayload(): Promise<HistoryPayload> {
@@ -39,6 +42,7 @@ export async function buildHistoryPayload(): Promise<HistoryPayload> {
     products,
     productVariants,
     tombstones,
+    stockEvents,
   ] = await Promise.all([
     db.transactions.toArray(),
     db.transactionItems.toArray(),
@@ -48,6 +52,7 @@ export async function buildHistoryPayload(): Promise<HistoryPayload> {
     db.products.toArray(),
     db.productVariants.toArray(),
     listTombstones(),
+    db.stockEvents.toArray(),
   ]);
 
   return {
@@ -62,6 +67,7 @@ export async function buildHistoryPayload(): Promise<HistoryPayload> {
     products,
     productVariants,
     tombstones,
+    stockEvents,
   };
 }
 
@@ -81,6 +87,13 @@ export function isNewer(incoming: { updatedAt?: number }, local: { updatedAt?: n
   return JSON.stringify(incoming) > JSON.stringify(local);
 }
 
+// Same-id stock events only collide on the deterministic base event; resolve by
+// timestamp + content so both phones keep the same one.
+function isNewerEvent(incoming: StockEvent, local: StockEvent): boolean {
+  if (incoming.at !== local.at) return incoming.at > local.at;
+  return JSON.stringify(incoming) > JSON.stringify(local);
+}
+
 export interface MergeSummary {
   transactions: number;
   expenses: number;
@@ -88,6 +101,7 @@ export interface MergeSummary {
   loyaltyClaims: number;
   products: number;
   variants: number;
+  stockEvents: number;
   deleted: number;
   skipped: number;
 }
@@ -103,6 +117,7 @@ export async function applyHistoryPayload(
     loyaltyClaims: 0,
     products: 0,
     variants: 0,
+    stockEvents: 0,
     deleted: 0,
     skipped: 0,
   };
@@ -156,7 +171,8 @@ export async function applyHistoryPayload(
         await db.productVariants.add(variant);
         summary.variants += 1;
       } else if (isNewer(variant, existing)) {
-        await db.productVariants.put(variant);
+        // stock is derived from stockEvents, never carried by metadata LWW
+        await db.productVariants.put({ ...variant, stock: existing.stock });
       } else {
         summary.skipped += 1;
       }
@@ -240,6 +256,23 @@ export async function applyHistoryPayload(
       await db.loyaltyClaims.add(claim);
       existingClaimIds.add(claim.id);
       summary.loyaltyClaims += 1;
+    }
+
+    // 8. Stock events: union by id (append-only). Every touched variant's stock
+    // cache is then recomputed from the merged log, so concurrent sales sum up.
+    const touchedVariants = new Set<string>();
+    for (const event of payload.stockEvents ?? []) {
+      touchedVariants.add(event.variantId);
+      const existing = await db.stockEvents.get(event.id);
+      if (!existing) {
+        await db.stockEvents.add(event);
+        summary.stockEvents += 1;
+      } else if (isNewerEvent(event, existing)) {
+        await db.stockEvents.put(event);
+      }
+    }
+    for (const variantId of touchedVariants) {
+      await recomputeStock(variantId);
     }
   });
 

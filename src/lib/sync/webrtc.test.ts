@@ -52,6 +52,7 @@ function payload(app = "dashboard-admin-sync"): HistoryPayload {
     products: [],
     productVariants: [],
     tombstones: [],
+    stockEvents: [],
   };
 }
 

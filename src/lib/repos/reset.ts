@@ -1,4 +1,5 @@
 import { getDb } from "../db";
+import { newId } from "../id";
 import { logAudit } from "./audit";
 
 export interface ResetScope {
@@ -25,6 +26,7 @@ export async function resetData(scope: ResetScope): Promise<void> {
       db.customers,
       db.loyaltyClaims,
       db.productVariants,
+      db.stockEvents,
     ],
     async () => {
       if (scope.transactions) {
@@ -39,9 +41,19 @@ export async function resetData(scope: ResetScope): Promise<void> {
       }
       if (scope.loyaltyClaims) await db.loyaltyClaims.clear();
       if (scope.resetStock) {
-        await db.productVariants
-          .toCollection()
-          .modify({ stock: 0, updatedAt: Date.now() });
+        const variants = await db.productVariants.toArray();
+        const at = Date.now();
+        for (const variant of variants) {
+          await db.stockEvents.add({
+            id: newId(),
+            variantId: variant.id,
+            type: "reset",
+            value: 0,
+            refId: null,
+            at,
+          });
+          await db.productVariants.update(variant.id, { stock: 0 });
+        }
       }
     },
   );
