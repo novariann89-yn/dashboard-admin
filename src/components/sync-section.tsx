@@ -400,6 +400,7 @@ export function SyncSection() {
           {summary && (
             <ul className="text-xs text-ink-soft">
               <li>Transaksi baru: {summary.transactions}</li>
+              <li>Dibatalkan: {summary.cancelled}</li>
               <li>Pengeluaran baru: {summary.expenses}</li>
               <li>Member baru/berubah: {summary.customers}</li>
               <li>Klaim loyalitas: {summary.loyaltyClaims}</li>

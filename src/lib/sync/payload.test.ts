@@ -149,6 +149,36 @@ describe("applyHistoryPayload", () => {
     assert.equal(await db.transactionItems.count(), 1);
   });
 
+  it("propagates a cancel that happened after a previous sync", async () => {
+    const db = getDb();
+    await db.transactions.add(tx("t1"));
+
+    await applyHistoryPayload(payload({ transactions: [tx("t1")] }));
+    assert.equal((await db.transactions.get("t1"))?.cancelled, false);
+
+    await applyHistoryPayload(
+      payload({
+        transactions: [
+          tx("t1", { cancelled: true, cancelReason: "salah", cancelledAt: 200 }),
+        ],
+      }),
+    );
+    const row = await db.transactions.get("t1");
+    assert.equal(row?.cancelled, true);
+    assert.equal(row?.cancelReason, "salah");
+  });
+
+  it("does not un-cancel a locally cancelled transaction", async () => {
+    const db = getDb();
+    await db.transactions.add(
+      tx("t1", { cancelled: true, cancelReason: "salah", cancelledAt: 200 }),
+    );
+
+    await applyHistoryPayload(payload({ transactions: [tx("t1")] }));
+
+    assert.equal((await db.transactions.get("t1"))?.cancelled, true);
+  });
+
   it("applies tombstones: deletes existing rows and blocks re-add", async () => {
     const db = getDb();
     await db.transactions.add(tx("t1"));

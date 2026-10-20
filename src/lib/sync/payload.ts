@@ -96,6 +96,7 @@ function isNewerEvent(incoming: StockEvent, local: StockEvent): boolean {
 
 export interface MergeSummary {
   transactions: number;
+  cancelled: number;
   expenses: number;
   customers: number;
   loyaltyClaims: number;
@@ -112,6 +113,7 @@ export async function applyHistoryPayload(
   const db = getDb();
   const summary: MergeSummary = {
     transactions: 0,
+    cancelled: 0,
     expenses: 0,
     customers: 0,
     loyaltyClaims: 0,
@@ -195,7 +197,7 @@ export async function applyHistoryPayload(
       }
     }
 
-    // 5. Transactions + items: union by id.
+    // 5. Transactions + items: union by id; a later cancel converges via cancelledAt.
     const existingTransactionIds = new Set(
       (await db.transactions.toArray()).map((transaction) => transaction.id),
     );
@@ -204,16 +206,32 @@ export async function applyHistoryPayload(
     );
 
     for (const transaction of payload.transactions ?? []) {
-      if (
-        existingTransactionIds.has(transaction.id) ||
-        tombTransactions.has(transaction.id)
-      ) {
+      if (tombTransactions.has(transaction.id)) {
         summary.skipped += 1;
         continue;
       }
-      await db.transactions.add(transaction);
-      existingTransactionIds.add(transaction.id);
-      summary.transactions += 1;
+      if (!existingTransactionIds.has(transaction.id)) {
+        await db.transactions.add(transaction);
+        existingTransactionIds.add(transaction.id);
+        summary.transactions += 1;
+        continue;
+      }
+      const existing = await db.transactions.get(transaction.id);
+      if (
+        existing &&
+        transaction.cancelled &&
+        (!existing.cancelled ||
+          (transaction.cancelledAt ?? 0) > (existing.cancelledAt ?? 0))
+      ) {
+        await db.transactions.update(transaction.id, {
+          cancelled: true,
+          cancelReason: transaction.cancelReason,
+          cancelledAt: transaction.cancelledAt,
+        });
+        summary.cancelled += 1;
+      } else {
+        summary.skipped += 1;
+      }
     }
 
     for (const item of payload.transactionItems ?? []) {

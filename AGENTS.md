@@ -89,9 +89,9 @@ After code changes, run `npm run restart` so the phone gets the update.
   "Kode 2 (balasan)"** with Salin/Tempel buttons; the signal is validated (SDP type +
   `signalingState`) so a wrong/swapped code gives a clear message instead of a raw
   `setRemoteDescription` error. Requires HTTPS (secure context); the QR scanner needs a
-  Chromium browser (`BarcodeDetector`), otherwise use the manual codes. `ponytail`: transaction
-  **cancel** is still union-by-id, so a cancel done after a sync does not update the flag on the
-  peer (the `refund` stock event still applies); `stockEvents` is never compacted.
+  Chromium browser (`BarcodeDetector`), otherwise use the manual codes. Transaction **cancel**
+  converges across phones via `cancelledAt` (a cancelled row overwrites an uncancelled one only
+  when newer); `stockEvents` is never compacted.
 - Tests use `fake-indexeddb/auto` (import it before any repo/db import) and
   `resetDbInstance()` between tests.
 
