@@ -12,6 +12,7 @@ import { getSession, logout as doLogout, type Session } from "@/lib/auth";
 import { readCachedTheme, syncThemeClass } from "@/lib/theme";
 import { useAppName } from "@/lib/use-app-name";
 import { loadAndApplyBackground } from "@/lib/background";
+import { compactStockEventsIfNeeded } from "@/lib/repos/stock";
 
 export default function AppLayout({
   children,
@@ -32,6 +33,10 @@ export default function AppLayout({
 
   useEffect(() => {
     loadAndApplyBackground();
+  }, []);
+
+  useEffect(() => {
+    compactStockEventsIfNeeded().catch(() => {});
   }, []);
 
   return (

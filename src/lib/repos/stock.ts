@@ -113,6 +113,55 @@ export async function addStock(variantId: string, qty: number): Promise<number> 
   return next;
 }
 
+// Collapses each variant's log into one absolute count event (the current
+// stock). Replay already ignores deltas that precede the latest count, so this
+// is sync-safe: a peer that still holds the old events just re-sends them and
+// they stay ignored. ponytail: they can be resurrected once per peer until both
+// sides compact, so the log shrinks only after both phones have compacted.
+export async function compactStockEvents(): Promise<number> {
+  const db = getDb();
+  return db.transaction(
+    "rw",
+    [db.stockEvents, db.productVariants],
+    async () => {
+      const events = await db.stockEvents.toArray();
+      if (events.length === 0) return 0;
+
+      const byVariant = new Map<string, StockEvent[]>();
+      for (const event of events) {
+        const list = byVariant.get(event.variantId) ?? [];
+        list.push(event);
+        byVariant.set(event.variantId, list);
+      }
+
+      const at = Date.now();
+      const snapshots: StockEvent[] = [];
+      for (const [variantId, list] of byVariant) {
+        const value = replayStockEvents(list);
+        snapshots.push({
+          id: `snapshot:${variantId}:${at}`,
+          variantId,
+          type: "count",
+          value,
+          refId: null,
+          at,
+        });
+        await db.productVariants.update(variantId, { stock: value });
+      }
+
+      await db.stockEvents.clear();
+      await db.stockEvents.bulkPut(snapshots);
+      return events.length;
+    },
+  );
+}
+
+// Called on app load; collapses the log only once it has grown enough to matter.
+export async function compactStockEventsIfNeeded(threshold = 500): Promise<void> {
+  if ((await getDb().stockEvents.count()) < threshold) return;
+  await compactStockEvents();
+}
+
 export async function setStock(variantId: string, qty: number): Promise<number> {
   const value = Math.max(0, Math.floor(qty));
   if (!Number.isFinite(value)) throw new Error("Jumlah tidak valid");

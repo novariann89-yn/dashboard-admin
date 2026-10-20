@@ -91,7 +91,8 @@ After code changes, run `npm run restart` so the phone gets the update.
   `setRemoteDescription` error. Requires HTTPS (secure context); the QR scanner needs a
   Chromium browser (`BarcodeDetector`), otherwise use the manual codes. Transaction **cancel**
   converges across phones via `cancelledAt` (a cancelled row overwrites an uncancelled one only
-  when newer); `stockEvents` is never compacted.
+  when newer); `stockEvents` is compacted on app load once the log passes 500 events
+  (`compactStockEvents`: one absolute count per variant, so replay stays cheap).
 - Tests use `fake-indexeddb/auto` (import it before any repo/db import) and
   `resetDbInstance()` between tests.
 

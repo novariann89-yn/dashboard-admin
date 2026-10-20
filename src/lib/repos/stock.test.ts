@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 import { getDb, resetDbInstance } from "../db";
 import type { ProductVariant, StockEvent, StockEventType } from "../types";
-import { addStock, replayStockEvents, setStock } from "./stock";
+import { addStock, appendStockEvent, compactStockEvents, recomputeStock, replayStockEvents, setStock } from "./stock";
 
 async function clearAll() {
   const db = getDb();
@@ -90,5 +90,38 @@ describe("stock events on the DB", () => {
     const row = await db.productVariants.get("v1");
     assert.equal(row?.stock, 4);
     assert.equal(row?.updatedAt, 123);
+  });
+
+  it("compacts the log into one count and keeps stock correct", async () => {
+    const db = getDb();
+    await db.productVariants.add(variant({ id: "v1", stock: 10 }));
+    await addStock("v1", 5);
+    await appendStockEvent("v1", "sale", -3, "t1");
+    assert.equal(await db.stockEvents.count(), 3);
+
+    assert.equal(await compactStockEvents(), 3);
+    assert.equal(await db.stockEvents.count(), 1);
+    assert.equal((await db.productVariants.get("v1"))?.stock, 12);
+
+    assert.equal(await appendStockEvent("v1", "sale", -2, "t2"), 10);
+  });
+
+  it("ignores a peer delta that predates a compaction snapshot", async () => {
+    const db = getDb();
+    await db.productVariants.add(variant({ id: "v1", stock: 5 }));
+    await appendStockEvent("v1", "sale", -1, "t1");
+    await compactStockEvents();
+
+    const [snapshot] = await db.stockEvents.toArray();
+    await db.stockEvents.add({
+      id: "old-peer",
+      variantId: "v1",
+      type: "sale",
+      value: -3,
+      refId: null,
+      at: snapshot.at - 500,
+    });
+
+    assert.equal(await recomputeStock("v1"), 4);
   });
 });
