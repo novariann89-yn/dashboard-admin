@@ -123,8 +123,9 @@ After code changes, run `npm run restart` so the phone gets the update.
   changing prices today must never alter past reports.
 - Cart quantity is capped at available stock; out-of-stock variants are shown greyed/disabled.
   A completed sale decrements stock (floor 0; no negative stock).
-- Owner sets net profit per variant (`netProfitPerUnit`); Dompet computes today's product
-  profit from that snapshot. Daily result = total product profit − total expenses.
+- Owner sets net profit per variant (`netProfitPerUnit`); Dompet computes product profit over
+  the selected period (Hari ini / Kemarin / 7 Hari / Bulan Ini / Tanggal / Kustom range) from
+  that snapshot. Result = total product profit − total expenses for that period.
 - Expenses: presets (`expensePresets`) plus manual entries. No closing; each day is a new
   period automatically and past data stays in Histori.
 - Histori (`/laporan`) persists across days and can be filtered by period, exported to CSV,
@@ -134,8 +135,9 @@ After code changes, run `npm run restart` so the phone gets the update.
   whole remaining at any time (clears to 0); each claim takes an optional note. Claim history
   shows in the Pelanggan member detail (owner-only, long-press delete, editable note).
 - Transaction dates are automatic. Expenses accept an optional manual date (`occurredAt`,
-  default today WIB) via the `Catat Pengeluaran` form in Dompet; the report period picker
-  is a filter, not data entry.
+  default today WIB) via the `Catat Pengeluaran` form in Dompet. `PeriodPicker` +
+  `resolvePeriod` (`lib/finance.ts`) drive a shared period filter on Dompet and Histori
+  (incl. a custom `range` from–to); the picker is a filter, not data entry.
 
 ## Safety rules
 

@@ -3,6 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo, useState } from "react";
 import { useToast } from "@/components/toast";
+import { PeriodPicker, type PeriodValue } from "@/components/period-picker";
 import {
   buttonClass,
   cardClass,
@@ -14,26 +15,27 @@ import {
   EXPENSE_CATEGORIES,
   createExpense,
   deleteExpense,
-  listExpenses,
 } from "@/lib/repos/expenses";
 import { getDb } from "@/lib/db";
 import { listVariantsWithProduct, profitPerUnit } from "@/lib/repos/products";
 import { listExpensePresets } from "@/lib/repos/expense-presets";
-import { isTodayWib } from "@/lib/format";
 import { resolvePeriod } from "@/lib/finance";
 
 export default function DompetPage() {
   const toast = useToast();
   const transactions = useLiveQuery(() => getDb().transactions.toArray(), [], []);
   const items = useLiveQuery(() => getDb().transactionItems.toArray(), [], []);
-  const expenses = useLiveQuery(() => listExpenses(200), [], []);
+  const expenses = useLiveQuery(() => getDb().expenses.toArray(), [], []);
   const variants = useLiveQuery(() => listVariantsWithProduct(false), [], []);
   const presets = useLiveQuery(() => listExpensePresets(), [], []);
 
+  const [periodValue, setPeriodValue] = useState<PeriodValue>({ preset: "today" });
   const [date, setDate] = useState(wibDateString());
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+
+  const period = resolvePeriod(periodValue);
 
   const categorySuggestions = useMemo(
     () =>
@@ -44,33 +46,31 @@ export default function DompetPage() {
   );
 
   const today = wibDateString();
-  const todayTransactions = transactions.filter(
-    (t) => !t.cancelled && isTodayWib(t.occurredAt)
+
+  const periodTransactions = transactions.filter(
+    (t) => !t.cancelled && t.occurredAt >= period.from && t.occurredAt < period.to,
+  );
+  const periodIds = new Set(periodTransactions.map((t) => t.id));
+  const periodItems = items.filter((item) => periodIds.has(item.transactionId));
+  const periodExpenses = expenses.filter(
+    (e) => e.occurredAt >= period.from && e.occurredAt < period.to,
   );
 
-  const todayExpenses = expenses.filter((e) => wibDateString(e.occurredAt) === today);
-
-  const todayItems = items.filter((item) => {
-    const transaction = transactions.find((t) => t.id === item.transactionId);
-    return transaction && !transaction.cancelled && isTodayWib(transaction.occurredAt);
-  });
-
-  const productSales = new Map<string, { qty: number; revenue: number; profit: number; items: string[] }>();
-  for (const item of todayItems) {
+  const productSales = new Map<string, { qty: number; revenue: number; profit: number }>();
+  for (const item of periodItems) {
     const variant = variants.find((v) => v.id === item.variantId);
     if (!variant) continue;
     const key = `${variant.productName} ${variant.sizeName}`;
-    const existing = productSales.get(key) ?? { qty: 0, revenue: 0, profit: 0, items: [] };
+    const existing = productSales.get(key) ?? { qty: 0, revenue: 0, profit: 0 };
     existing.qty += item.qty;
     existing.revenue += item.unitPrice * item.qty;
     existing.profit += profitPerUnit(item) * item.qty;
-    if (!existing.items.includes(key)) existing.items.push(key);
     productSales.set(key, existing);
   }
 
-  const totalOmzet = todayTransactions.reduce((sum, t) => sum + t.finalTotal, 0);
+  const totalOmzet = periodTransactions.reduce((sum, t) => sum + t.finalTotal, 0);
   const totalProfit = Array.from(productSales.values()).reduce((sum, p) => sum + p.profit, 0);
-  const totalPengeluaran = todayExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalPengeluaran = periodExpenses.reduce((sum, e) => sum + e.amount, 0);
   const hasilBersih = totalProfit - totalPengeluaran;
 
   async function handleSaveExpense() {
@@ -86,7 +86,7 @@ export default function DompetPage() {
       const occurredAt =
         date === today
           ? Date.now()
-          : resolvePeriod("day", date).from + 12 * 60 * 60 * 1000;
+          : resolvePeriod({ preset: "day", day: date }).from + 12 * 60 * 60 * 1000;
       await createExpense({
         category,
         amount: Number(amount),
@@ -113,11 +113,14 @@ export default function DompetPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="text-xl font-extrabold tracking-tight">Dompet</h1>
+      <div className="flex flex-col gap-3">
+        <h1 className="text-xl font-extrabold tracking-tight">Dompet</h1>
+        <PeriodPicker value={periodValue} onChange={setPeriodValue} />
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-card border-2 border-ink bg-surface p-4 shadow-card">
-          <p className="text-xs font-bold text-ink-soft">Omzet Hari Ini</p>
+          <p className="text-xs font-bold text-ink-soft">Omzet · {period.label}</p>
           <p className="mt-1 text-2xl font-extrabold tabular-nums">{rupiah(totalOmzet)}</p>
         </div>
         <div className="rounded-card border-2 border-ink bg-surface p-4 shadow-card">
@@ -129,15 +132,15 @@ export default function DompetPage() {
           <p className="mt-1 text-2xl font-extrabold tabular-nums text-success">{rupiah(totalProfit)}</p>
         </div>
         <div className="rounded-card border-2 border-ink bg-surface p-4 shadow-card">
-          <p className="text-xs font-bold text-ink-soft">Pengeluaran Hari Ini</p>
+          <p className="text-xs font-bold text-ink-soft">Pengeluaran · {period.label}</p>
           <p className="mt-1 text-2xl font-extrabold tabular-nums text-error">{rupiah(totalPengeluaran)}</p>
         </div>
       </div>
 
       <section className={cardClass}>
-        <h2 className={sectionLabelClass}>Penjualan Hari Ini</h2>
+        <h2 className={sectionLabelClass}>Penjualan · {period.label}</h2>
         {productSales.size === 0 ? (
-          <p className="mt-2 text-sm text-ink-soft">Belum ada penjualan hari ini.</p>
+          <p className="mt-2 text-sm text-ink-soft">Belum ada penjualan pada periode ini.</p>
         ) : (
           <ul className="mt-2 flex flex-col divide-y divide-line">
             {Array.from(productSales.entries()).map(([label, data]) => (
@@ -213,18 +216,17 @@ export default function DompetPage() {
           <button type="button" onClick={handleSaveExpense} className={buttonClass}>
             Simpan Pengeluaran
           </button>
-          {date !== today && (
-            <p className="text-[11px] text-ink-soft">
-              Tanggal selain hari ini tidak muncul di daftar ini — lihat Histori.
-            </p>
-          )}
+          <p className="text-[11px] text-ink-soft">
+            Tanggal di atas untuk mencatat. Daftar di bawah mengikuti periode yang
+            dipilih.
+          </p>
         </div>
 
-        {todayExpenses.length === 0 ? (
-          <p className="mt-2 text-sm text-ink-soft">Belum ada pengeluaran hari ini.</p>
+        {periodExpenses.length === 0 ? (
+          <p className="mt-2 text-sm text-ink-soft">Belum ada pengeluaran pada periode ini.</p>
         ) : (
           <ul className="mt-2 flex flex-col divide-y divide-line">
-            {todayExpenses.map((expense) => (
+            {periodExpenses.map((expense) => (
               <li key={expense.id} className="flex items-center justify-between py-2">
                 <span className="text-sm">
                   <span className="font-bold">{expense.category}</span>

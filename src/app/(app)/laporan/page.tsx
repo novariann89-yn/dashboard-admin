@@ -40,7 +40,7 @@ export default function LaporanPage() {
     setCanDelete(canDeleteHistory(getSession()));
   }, []);
 
-  const period = resolvePeriod(periodValue.preset, periodValue.day);
+  const period = resolvePeriod(periodValue);
 
   const periodTransactions = transactions
     .filter(
